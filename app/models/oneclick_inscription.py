@@ -8,7 +8,7 @@ class OneclickInscription(Base):
     
     id = Column(String(36), primary_key=True)
     username = Column(String(256), nullable=False, index=True)
-    email = Column(String(254), nullable=False)
+    email = Column(String(254), nullable=True)
     tbk_user = Column(Text, nullable=False)  # Encrypted
     card_type = Column(String(50))
     card_number_masked = Column(String(20))  # Only last 4 digits

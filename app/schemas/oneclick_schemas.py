@@ -17,6 +17,7 @@ class InscriptionStartResponse(BaseModel):
 
 class InscriptionFinishRequest(BaseModel):
     token: str = Field(..., description="TBK_TOKEN received from Transbank")
+    username: str = Field(..., description="Username for the inscription")
 
 
 class InscriptionFinishResponse(BaseModel):

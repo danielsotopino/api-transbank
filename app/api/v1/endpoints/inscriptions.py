@@ -72,7 +72,7 @@ async def finish_inscription(
         # Save inscription to database
         inscription = OneclickInscription(
             id=str(uuid.uuid4()),
-            username=result.get("username", None),
+            username=request.username,
             email=None,  # No disponible en el resultado, requiere refactor para persistir desde start
             tbk_user=result["tbk_user"],
             card_type=result["card_type"],

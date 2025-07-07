@@ -58,7 +58,7 @@ class TestInscriptionAPI:
         mock_response.card_number = "XXXX-XXXX-XXXX-1234"
         mock_finish.return_value = mock_response
         
-        finish_data = {"token": "test_token_123"}
+        finish_data = {"token": "test_token_123", "username": "testuser"}
         
         # Act
         response = client.put(
@@ -228,7 +228,8 @@ class TestHealthCheck:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "healthy"
-        assert "service" in data
-        assert "version" in data
-        assert "environment" in data
+        assert data["success"] is True
+        assert data["data"]["status"] == "healthy"
+        assert "service" in data["data"]
+        assert "version" in data["data"]
+        assert "environment" in data["data"]
