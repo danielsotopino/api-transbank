@@ -106,17 +106,32 @@ All endpoints must return standardized responses:
 
 ### Integration Environment
 ```python
-from transbank.oneclick.mall_inscription import MallInscription
-from transbank.oneclick.mall_transaction import MallTransaction
+from transbank.webpay.oneclick.mall_inscription import MallInscription
+from transbank.webpay.oneclick.mall_transaction import MallTransaction
 
-MallInscription.configure_for_testing()
-MallTransaction.configure_for_testing()
+MallInscription.build_for_integration(
+    commerce_code="YOUR_COMMERCE_CODE",
+    api_key="YOUR_API_KEY"
+)
+MallTransaction.build_for_integration(
+    commerce_code="YOUR_COMMERCE_CODE",
+    api_key="YOUR_API_KEY"
+)
 ```
 
 ### Production Environment
 ```python
-MallInscription.configure_for_production(commerce_code, api_key)
-MallTransaction.configure_for_production(commerce_code, api_key)
+from transbank.webpay.oneclick.mall_inscription import MallInscription
+from transbank.webpay.oneclick.mall_transaction import MallTransaction
+
+MallInscription.build_for_production(
+    commerce_code="YOUR_COMMERCE_CODE",
+    api_key="YOUR_API_KEY"
+)
+MallTransaction.build_for_production(
+    commerce_code="YOUR_COMMERCE_CODE",
+    api_key="YOUR_API_KEY"
+)
 ```
 
 ## Key Files and Patterns
@@ -131,7 +146,14 @@ MallTransaction.configure_for_production(commerce_code, api_key)
 from core.structured_logger import StructuredLogger
 
 logger = StructuredLogger(__name__)
-logger.info("Message", context={"key": "value"})
+# Contexto flexible recomendado:
+logger.with_context("key", "value").info("Message")
+logger.with_contexts(key1="value1", key2="value2").info("Message")
+
+# También puedes encadenar más contexto:
+logger.with_contexts(username=username, transaction_id=tid).info("Transaction authorized successfully")
+
+# El contexto se agrega automáticamente, no es necesario pasar 'context' como argumento.
 ```
 
 ### Service Pattern
