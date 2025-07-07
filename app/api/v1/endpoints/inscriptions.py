@@ -21,8 +21,8 @@ from app.schemas.response_models import ApiResponse
 from app.models.oneclick_inscription import OneclickInscription
 from app.core.structured_logger import StructuredLogger
 from app.core.exceptions import (
-    UsuarioNoEncontradoException,
-    InscripcionNoEncontradaException
+    UserNotFoundedException,
+    InscriptionNotFoundException
 )
 from app.config import settings
 
@@ -130,7 +130,7 @@ async def delete_inscription(
         ).first()
         
         if not inscription:
-            raise InscripcionNoEncontradaException(request.tbk_user)
+            raise InscriptionNotFoundException(request.tbk_user)
         
         # Delete from Transbank
         await transbank_service.delete_inscription(

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from app.services.transbank_service import TransbankService
-from app.core.exceptions import TransbankCommunicationException, TransaccionRechazadaException
+from app.core.exceptions import TransbankCommunicationException, TransactionRejectedException
 
 
 class TestTransbankService:
@@ -68,7 +68,7 @@ class TestTransbankService:
         assert result["response_code"] == 0
         assert result["tbk_user"] == "user_token_123"
         assert result["card_type"] == "VISA"
-        mock_finish.assert_called_once_with(token="test_token")
+        mock_finish.assert_called_once_with("test_token")
     
     @patch('app.services.transbank_service.MallInscription.finish')
     @pytest.mark.asyncio
@@ -79,7 +79,7 @@ class TestTransbankService:
         mock_finish.return_value = mock_response
         
         # Act & Assert
-        with pytest.raises(TransaccionRechazadaException):
+        with pytest.raises(TransactionRejectedException):
             await transbank_service.finish_inscription(token="test_token")
     
     @patch('app.services.transbank_service.MallTransaction.authorize')
@@ -143,10 +143,7 @@ class TestTransbankService:
         
         # Assert
         assert result["deleted"] is True
-        mock_delete.assert_called_once_with(
-            tbk_user="user_token",
-            username="testuser"
-        )
+        mock_delete.assert_called_once_with("user_token", "testuser")
     
     @patch('app.services.transbank_service.MallTransaction.status')
     @pytest.mark.asyncio
@@ -185,6 +182,5 @@ class TestTransbankService:
         assert result["session_id"] == "session_123"
         assert len(result["details"]) == 1
         mock_status.assert_called_once_with(
-            child_buy_order="order_123",
-            child_commerce_code="597055555542"
+            buy_order="order_123"
         )

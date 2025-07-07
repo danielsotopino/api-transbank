@@ -5,36 +5,36 @@ class DomainException(Exception):
         super().__init__(self.message)
 
 
-class ClienteNoEncontradoException(DomainException):
-    def __init__(self, cliente_id: int):
+class ClientNotFoundedException(DomainException):
+    def __init__(self, client_id: int):
         super().__init__(
-            f"Cliente con ID {cliente_id} no encontrado",
-            "CLIENTE_NO_ENCONTRADO"
+            f"Cliente con ID {client_id} no encontrado",
+            "CLIENT_NOT_FOUND"
         )
 
 
-class UsuarioNoEncontradoException(DomainException):
+class UserNotFoundedException(DomainException):
     def __init__(self, username: str):
         super().__init__(
             f"Usuario {username} no encontrado",
-            "USUARIO_NO_ENCONTRADO"
+            "USER_NOT_FOUND"
         )
 
 
-class InscripcionNoEncontradaException(DomainException):
+class InscriptionNotFoundException(DomainException):
     def __init__(self, tbk_user: str):
         super().__init__(
             f"Inscripción no encontrada",
-            "INSCRIPCION_NO_ENCONTRADA"
+            "INSCRIPTION_NOT_FOUND"
         )
 
 
-class TransaccionRechazadaException(DomainException):
+class TransactionRejectedException(DomainException):
     def __init__(self, response_code: int, message: str = None):
         default_message = f"Transacción rechazada con código {response_code}"
         super().__init__(
             message or default_message,
-            "TRANSACCION_RECHAZADA"
+            "TRANSACTION_REJECTED"
         )
 
 
@@ -54,11 +54,11 @@ class OrdenCompraDuplicadaException(DomainException):
         )
 
 
-class MontoInvalidoException(DomainException):
-    def __init__(self, monto: int):
+class InvalidAmountException(DomainException):
+    def __init__(self, amount: int):
         super().__init__(
-            f"Monto {monto} es inválido",
-            "MONTO_INVALIDO"
+            f"Monto {amount} es inválido",
+            "INVALID_AMOUNT"
         )
 
 

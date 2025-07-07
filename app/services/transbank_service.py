@@ -5,7 +5,7 @@ from ..config import settings
 from ..core.structured_logger import StructuredLogger
 from ..core.exceptions import (
     TransbankCommunicationException,
-    TransaccionRechazadaException,
+    TransactionRejectedException,
     TokenExpiradoException
 )
 
@@ -84,7 +84,7 @@ class TransbankService:
             response = self.mall_inscription.finish(token)
             
             if response.response_code != 0:
-                raise TransaccionRechazadaException(
+                raise TransactionRejectedException(
                     response.response_code,
                     "Inscripción rechazada por Transbank"
                 )
@@ -107,7 +107,7 @@ class TransbankService:
             
             return result
             
-        except TransaccionRechazadaException:
+        except TransactionRejectedException:
             raise
         except Exception as e:
             logger.with_contexts(token=token).error(

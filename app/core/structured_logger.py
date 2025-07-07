@@ -29,15 +29,6 @@ class StructuredLogger:
     def debug(self, message: str, context: Optional[Dict[str, Any]] = None):
         self._log(logging.DEBUG, message, context)
     
-    def with_cliente(self, cliente_id: int):
-        return ContextBuilder(self).with_cliente(cliente_id)
-    
-    def with_pago(self, pago_id: int):
-        return ContextBuilder(self).with_pago(pago_id)
-    
-    def with_username(self, username: str):
-        return ContextBuilder(self).with_username(username)
-    
     def with_context(self, key: str, value: Any):
         """Agrega un contexto genérico (clave, valor)."""
         return ContextBuilder(self).with_context(key, value)
@@ -54,26 +45,6 @@ class ContextBuilder:
     def __init__(self, logger: StructuredLogger):
         self.logger = logger
         self.context = {}
-    
-    def with_cliente(self, cliente_id: int):
-        self.context['cliente_id'] = cliente_id
-        return self
-    
-    def with_pago(self, pago_id: int):
-        self.context['pago_id'] = pago_id
-        return self
-    
-    def with_monto(self, monto: str):
-        self.context['monto'] = monto
-        return self
-    
-    def with_username(self, username: str):
-        self.context['username'] = username
-        return self
-    
-    def with_transaction(self, transaction_id: str):
-        self.context['transaction_id'] = transaction_id
-        return self
     
     def with_context(self, key: str, value: Any):
         """Agrega un contexto genérico (clave, valor)."""

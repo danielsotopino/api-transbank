@@ -24,8 +24,8 @@ from app.models.oneclick_transaction import OneclickTransaction, OneclickTransac
 from app.models.oneclick_inscription import OneclickInscription
 from app.core.structured_logger import StructuredLogger
 from app.core.exceptions import (
-    UsuarioNoEncontradoException,
-    InscripcionNoEncontradaException,
+    UserNotFoundedException,
+    InscriptionNotFoundException,
     OrdenCompraDuplicadaException
 )
 
@@ -57,7 +57,7 @@ async def authorize_transaction(
         ).first()
         
         if not inscription:
-            raise InscripcionNoEncontradaException(request.tbk_user)
+            raise InscriptionNotFoundException(request.tbk_user)
         
         # Prepare transaction details for Transbank
         details = [
