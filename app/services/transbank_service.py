@@ -5,8 +5,7 @@ from ..config import settings
 from ..core.structured_logger import StructuredLogger
 from ..core.exceptions import (
     TransbankCommunicationException,
-    TransactionRejectedException,
-    TokenExpiradoException
+    TransactionRejectedException
 )
 
 logger = StructuredLogger(__name__)
@@ -55,13 +54,15 @@ class TransbankService:
                 email=email,
                 response_url=response_url
             )
+
+            logger.info(f"Response: {response}")
             
             result = {
-                "token": response.token,
-                "url_webpay": response.url_webpay
+                "token": response["token"],
+                "url_webpay": response["url_webpay"]
             }
             
-            logger.with_contexts(username=username, token=response.token[:10] + "...").info(
+            logger.with_contexts(username=username, token=response["token"][:10] + "...").info(
                 "Inscripción iniciada exitosamente"
             )
             
@@ -83,24 +84,24 @@ class TransbankService:
             
             response = self.mall_inscription.finish(token)
             
-            if response.response_code != 0:
+            if response["response_code"] != 0:
                 raise TransactionRejectedException(
-                    response.response_code,
+                    response["response_code"],
                     "Inscripción rechazada por Transbank"
                 )
             
             result = {
-                "tbk_user": response.tbk_user,
-                "response_code": response.response_code,
-                "authorization_code": response.authorization_code,
-                "card_type": response.card_type,
-                "card_number": response.card_number
+                "tbk_user": response["tbk_user"],
+                "response_code": response["response_code"],
+                "authorization_code": response["authorization_code"],
+                "card_type": response["card_type"],
+                "card_number": response["card_number"]
             }
             
             logger.with_contexts(
-                tbk_user=response.tbk_user[:10] + "...",
-                card_type=response.card_type,
-                card_number=response.card_number
+                tbk_user=response["tbk_user"][:10] + "...",
+                card_type=response["card_type"],
+                card_number=response["card_number"]
             ).info(
                 "Inscripción finalizada exitosamente"
             )
@@ -181,44 +182,44 @@ class TransbankService:
             
             # Process response details
             result_details = []
-            for detail in response.details:
-                if detail.response_code != 0:
+            for detail in response["details"]:
+                if detail["response_code"] != 0:
                     logger.with_contexts(
                         username=username,
-                        commerce_code=detail.commerce_code,
-                        response_code=detail.response_code,
-                        buy_order=detail.buy_order,
-                        amount=detail.amount
+                        commerce_code=detail["commerce_code"],
+                        response_code=detail["response_code"],
+                        buy_order=detail["buy_order"],
+                        amount=detail["amount"]
                     ).warning(
-                        f"Transacción rechazada para comercio {detail.commerce_code}"
+                        f"Transacción rechazada para comercio {detail['commerce_code']}"
                     )
                 
                 result_details.append({
-                    "amount": detail.amount,
-                    "status": "approved" if detail.response_code == 0 else "rejected",
-                    "authorization_code": detail.authorization_code,
-                    "payment_type_code": detail.payment_type_code,
-                    "response_code": detail.response_code,
-                    "installments_number": detail.installments_number,
-                    "commerce_code": detail.commerce_code,
-                    "buy_order": detail.buy_order
+                    "amount": detail["amount"],
+                    "status": "approved" if detail["response_code"] == 0 else "rejected",
+                    "authorization_code": detail["authorization_code"],
+                    "payment_type_code": detail["payment_type_code"],
+                    "response_code": detail["response_code"],
+                    "installments_number": detail["installments_number"],
+                    "commerce_code": detail["commerce_code"],
+                    "buy_order": detail["buy_order"]
                 })
             
             result = {
-                "parent_buy_order": response.parent_buy_order,
-                "session_id": response.session_id,
+                "parent_buy_order": response["parent_buy_order"],
+                "session_id": response["session_id"],
                 "card_detail": {
-                    "card_number": response.card_detail.card_number
+                    "card_number": response["card_detail"]["card_number"]
                 },
-                "accounting_date": response.accounting_date,
-                "transaction_date": response.transaction_date.isoformat(),
+                "accounting_date": response["accounting_date"],
+                "transaction_date": response["transaction_date"].isoformat(),
                 "details": result_details
             }
             
             logger.with_contexts(
                 username=username,
                 parent_buy_order=parent_buy_order,
-                session_id=response.session_id,
+                session_id=response["session_id"],
                 approved_count=len([d for d in result_details if d["status"] == "approved"])
             ).info(
                 "Transacción autorizada exitosamente"
@@ -249,24 +250,24 @@ class TransbankService:
             )
             
             result = {
-                "buy_order": response.buy_order,
-                "session_id": response.session_id,
+                "buy_order": response["buy_order"],
+                "session_id": response["session_id"],
                 "card_detail": {
-                    "card_number": response.card_detail.card_number
+                    "card_number": response["card_detail"]["card_number"]
                 },
-                "accounting_date": response.accounting_date,
-                "transaction_date": response.transaction_date.isoformat(),
+                "accounting_date": response["accounting_date"],
+                "transaction_date": response["transaction_date"].isoformat(),
                 "details": [{
                     "amount": detail.amount,
-                    "status": "approved" if detail.response_code == 0 else "rejected",
-                    "authorization_code": detail.authorization_code,
-                    "payment_type_code": detail.payment_type_code,
-                    "response_code": detail.response_code,
-                    "installments_number": detail.installments_number,
-                    "commerce_code": detail.commerce_code,
-                    "buy_order": detail.buy_order,
+                    "status": "approved" if detail["response_code"] == 0 else "rejected",
+                    "authorization_code": detail["authorization_code"],
+                    "payment_type_code": detail["payment_type_code"],
+                    "response_code": detail["response_code"],
+                    "installments_number": detail["installments_number"],
+                    "commerce_code": detail["commerce_code"],
+                    "buy_order": detail["buy_order"],
                     "balance": getattr(detail, 'balance', None)
-                } for detail in response.details]
+                } for detail in response["details"]]
             }
             
             logger.with_contexts(child_buy_order=child_buy_order).info(
@@ -303,10 +304,10 @@ class TransbankService:
             )
             
             result = {
-                "authorization_code": response.authorization_code,
-                "authorization_date": response.authorization_date.isoformat(),
-                "captured_amount": response.captured_amount,
-                "response_code": response.response_code
+                "authorization_code": response["authorization_code"],
+                "authorization_date": response["authorization_date"].isoformat(),
+                "captured_amount": response["captured_amount"],
+                "response_code": response["response_code"]
             }
             
             logger.with_contexts(child_buy_order=child_buy_order, captured_amount=capture_amount).info(
@@ -342,8 +343,8 @@ class TransbankService:
             )
             
             result = {
-                "type": response.type,
-                "response_code": response.response_code,
+                "type": response["type"],
+                "response_code": response["response_code"],
                 "reversed_amount": getattr(response, 'reversed_amount', amount)
             }
             
