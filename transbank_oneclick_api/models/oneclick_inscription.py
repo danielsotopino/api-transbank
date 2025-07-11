@@ -5,6 +5,7 @@ from ..database import Base
 
 class OneclickInscription(Base):
     __tablename__ = 'oneclick_inscriptions'
+    __table_args__ = {'schema': 'transbankoneclick'}
     
     id = Column(String(36), primary_key=True)
     username = Column(String(256), nullable=False, index=True)

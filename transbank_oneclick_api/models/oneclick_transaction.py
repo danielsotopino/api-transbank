@@ -5,10 +5,11 @@ from ..database import Base
 
 class OneclickTransaction(Base):
     __tablename__ = 'oneclick_transactions'
+    __table_args__ = {'schema': 'transbankoneclick'}
     
     id = Column(String(36), primary_key=True)
     username = Column(String(256), nullable=False, index=True)
-    inscription_id = Column(String(36), ForeignKey('oneclick_inscriptions.id'), nullable=False)
+    inscription_id = Column(String(36), ForeignKey('transbankoneclick.oneclick_inscriptions.id'), nullable=False)
     parent_buy_order = Column(String(255), nullable=False, unique=True, index=True)
     session_id = Column(String(255))
     transaction_date = Column(DateTime, nullable=False)
@@ -27,9 +28,10 @@ class OneclickTransaction(Base):
 
 class OneclickTransactionDetail(Base):
     __tablename__ = 'oneclick_transaction_details'
+    __table_args__ = {'schema': 'transbankoneclick'}
     
     id = Column(String(36), primary_key=True)
-    transaction_id = Column(String(36), ForeignKey('oneclick_transactions.id'), nullable=False, index=True)
+    transaction_id = Column(String(36), ForeignKey('transbankoneclick.oneclick_transactions.id'), nullable=False, index=True)
     commerce_code = Column(String(20), nullable=False)
     buy_order = Column(String(255), nullable=False)
     amount = Column(Integer, nullable=False)
