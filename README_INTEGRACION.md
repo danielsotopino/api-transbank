@@ -49,7 +49,7 @@ Puedes montar la API de transbank directamente en tu aplicación FastAPI:
 
 ```python
 from fastapi import FastAPI
-from app.main import app as transbank_app
+from transbank_oneclick_api.main import app as transbank_app
 
 main_app = FastAPI()
 
@@ -59,7 +59,12 @@ main_app.mount("/transbank", transbank_app)
 # Ahora los endpoints estarán disponibles en /transbank/api/v1/...
 ```
 
-O puedes importar y usar los routers/endpoints específicos según tu necesidad.
+O puedes importar y usar los routers/endpoints específicos según tu necesidad:
+
+```python
+from transbank_oneclick_api.api.v1.router import api_router
+main_app.include_router(api_router, prefix="/transbank/api/v1")
+```
 
 ---
 
