@@ -14,7 +14,7 @@ setup(
     author_email="soporte@transbank.cl",
     url="https://www.transbankdevelopers.cl/",
     packages=find_packages(
-        include=["app", "app.*"],
+        include=["transbank_oneclick_api", "transbank_oneclick_api.*"],
         exclude=["tests", "tests.*", "alembic", "alembic.*", "venv", "venv.*"]
     ),
     include_package_data=True,

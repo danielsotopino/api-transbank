@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 class TestInscriptionAPI:
     
-    @patch('app.services.transbank_service.MallInscription.start')
+    @patch('transbank_oneclick_api.services.transbank_service.MallInscription.start')
     def test_start_inscription_success(self, mock_start, client, sample_inscription_data):
         # Arrange
         mock_start.return_value = {
@@ -47,7 +47,7 @@ class TestInscriptionAPI:
         assert data["success"] is False
         assert len(data["errors"]) > 0
     
-    @patch('app.services.transbank_service.MallInscription.finish')
+    @patch('transbank_oneclick_api.services.transbank_service.MallInscription.finish')
     def test_finish_inscription_success(self, mock_finish, client, db_session):
         # Arrange
         mock_finish.return_value = {
@@ -89,10 +89,10 @@ class TestInscriptionAPI:
 
 class TestTransactionAPI:
     
-    @patch('app.services.transbank_service.MallTransaction.authorize')
+    @patch('transbank_oneclick_api.services.transbank_service.MallTransaction.authorize')
     def test_authorize_transaction_success(self, mock_authorize, client, db_session, sample_transaction_data):
         # Arrange - First create a mock inscription
-        from app.models.oneclick_inscription import OneclickInscription
+        from transbank_oneclick_api.models.oneclick_inscription import OneclickInscription
         import uuid
         from datetime import datetime
         
@@ -148,8 +148,8 @@ class TestTransactionAPI:
     
     def test_authorize_transaction_duplicate_order(self, client, db_session, sample_transaction_data):
         # Arrange - Create an inscription and existing transaction
-        from app.models.oneclick_inscription import OneclickInscription
-        from app.models.oneclick_transaction import OneclickTransaction
+        from transbank_oneclick_api.models.oneclick_inscription import OneclickInscription
+        from transbank_oneclick_api.models.oneclick_transaction import OneclickTransaction
         import uuid
         from datetime import datetime
         

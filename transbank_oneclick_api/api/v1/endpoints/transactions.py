@@ -5,10 +5,10 @@ import uuid
 import json
 from datetime import datetime
 
-from app.database import get_db
-from app.services.transbank_service import TransbankService
-from app.api.deps import get_transbank_service
-from app.schemas.oneclick_schemas import (
+from transbank_oneclick_api.database import get_db
+from transbank_oneclick_api.services.transbank_service import TransbankService
+from transbank_oneclick_api.api.deps import get_transbank_service
+from transbank_oneclick_api.schemas.oneclick_schemas import (
     TransactionAuthorizeRequest,
     TransactionAuthorizeResponse,
     TransactionStatusResponse,
@@ -19,11 +19,11 @@ from app.schemas.oneclick_schemas import (
     TransactionHistoryResponse,
     TransactionDetailResponse
 )
-from app.schemas.response_models import ApiResponse
-from app.models.oneclick_transaction import OneclickTransaction, OneclickTransactionDetail
-from app.models.oneclick_inscription import OneclickInscription
-from app.core.structured_logger import StructuredLogger
-from app.core.exceptions import (
+from transbank_oneclick_api.schemas.response_models import ApiResponse
+from transbank_oneclick_api.models.oneclick_transaction import OneclickTransaction, OneclickTransactionDetail
+from transbank_oneclick_api.models.oneclick_inscription import OneclickInscription
+from transbank_oneclick_api.core.structured_logger import StructuredLogger
+from transbank_oneclick_api.core.exceptions import (
     UserNotFoundedException,
     InscriptionNotFoundException,
     OrdenCompraDuplicadaException

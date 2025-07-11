@@ -4,10 +4,10 @@ from typing import List
 import uuid
 from datetime import datetime
 
-from app.database import get_db
-from app.services.transbank_service import TransbankService
-from app.api.deps import get_transbank_service
-from app.schemas.oneclick_schemas import (
+from transbank_oneclick_api.database import get_db
+from transbank_oneclick_api.services.transbank_service import TransbankService
+from transbank_oneclick_api.api.deps import get_transbank_service
+from transbank_oneclick_api.schemas.oneclick_schemas import (
     InscriptionStartRequest,
     InscriptionStartResponse,
     InscriptionFinishRequest,
@@ -17,14 +17,14 @@ from app.schemas.oneclick_schemas import (
     InscriptionListResponse,
     InscriptionInfo
 )
-from app.schemas.response_models import ApiResponse
-from app.models.oneclick_inscription import OneclickInscription
-from app.core.structured_logger import StructuredLogger
-from app.core.exceptions import (
+from transbank_oneclick_api.schemas.response_models import ApiResponse
+from transbank_oneclick_api.models.oneclick_inscription import OneclickInscription
+from transbank_oneclick_api.core.structured_logger import StructuredLogger
+from transbank_oneclick_api.core.exceptions import (
     UserNotFoundedException,
     InscriptionNotFoundException
 )
-from app.config import settings
+from transbank_oneclick_api.config import settings
 
 router = APIRouter()
 logger = StructuredLogger(__name__)

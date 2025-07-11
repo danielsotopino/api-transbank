@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from app.services.transbank_service import TransbankService
-from app.core.exceptions import TransbankCommunicationException, TransactionRejectedException
+from transbank_oneclick_api.services.transbank_service import TransbankService
+from transbank_oneclick_api.core.exceptions import TransbankCommunicationException, TransactionRejectedException
 
 
 class TestTransbankService:
@@ -10,7 +10,7 @@ class TestTransbankService:
     def transbank_service(self):
         return TransbankService()
     
-    @patch('app.services.transbank_service.MallInscription.start')
+    @patch('transbank_oneclick_api.services.transbank_service.MallInscription.start')
     @pytest.mark.asyncio
     async def test_start_inscription_success(self, mock_start, transbank_service):
         # Arrange
@@ -35,7 +35,7 @@ class TestTransbankService:
             response_url="https://example.com/callback"
         )
     
-    @patch('app.services.transbank_service.MallInscription.start')
+    @patch('transbank_oneclick_api.services.transbank_service.MallInscription.start')
     @pytest.mark.asyncio
     async def test_start_inscription_error(self, mock_start, transbank_service):
         # Arrange
@@ -49,7 +49,7 @@ class TestTransbankService:
                 response_url="https://example.com/callback"
             )
     
-    @patch('app.services.transbank_service.MallInscription.finish')
+    @patch('transbank_oneclick_api.services.transbank_service.MallInscription.finish')
     @pytest.mark.asyncio
     async def test_finish_inscription_success(self, mock_finish, transbank_service):
         # Arrange
@@ -70,7 +70,7 @@ class TestTransbankService:
         assert result["card_type"] == "VISA"
         mock_finish.assert_called_once_with("test_token")
     
-    @patch('app.services.transbank_service.MallInscription.finish')
+    @patch('transbank_oneclick_api.services.transbank_service.MallInscription.finish')
     @pytest.mark.asyncio
     async def test_finish_inscription_rejected(self, mock_finish, transbank_service):
         # Arrange
@@ -82,7 +82,7 @@ class TestTransbankService:
         with pytest.raises(TransactionRejectedException):
             await transbank_service.finish_inscription(token="test_token")
     
-    @patch('app.services.transbank_service.MallTransaction.authorize')
+    @patch('transbank_oneclick_api.services.transbank_service.MallTransaction.authorize')
     @pytest.mark.asyncio
     async def test_authorize_transaction_success(self, mock_authorize, transbank_service):
         # Arrange
@@ -128,7 +128,7 @@ class TestTransbankService:
         assert result["details"][0]["status"] == "approved"
         assert result["details"][0]["response_code"] == 0
     
-    @patch('app.services.transbank_service.MallInscription.delete')
+    @patch('transbank_oneclick_api.services.transbank_service.MallInscription.delete')
     @pytest.mark.asyncio
     async def test_delete_inscription_success(self, mock_delete, transbank_service):
         # Arrange
@@ -144,7 +144,7 @@ class TestTransbankService:
         assert result["deleted"] is True
         mock_delete.assert_called_once_with("user_token", "testuser")
     
-    @patch('app.services.transbank_service.MallTransaction.status')
+    @patch('transbank_oneclick_api.services.transbank_service.MallTransaction.status')
     @pytest.mark.asyncio
     async def test_get_transaction_status_success(self, mock_status, transbank_service):
         # Arrange

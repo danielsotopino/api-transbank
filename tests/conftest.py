@@ -6,9 +6,9 @@ from sqlalchemy.pool import StaticPool
 import tempfile
 import os
 
-from app.main import app
-from app.database import Base, get_db
-from app.config import settings
+from transbank_oneclick_api.main import app
+from transbank_oneclick_api.database import Base, get_db
+from transbank_oneclick_api.config import settings
 
 
 # Use SQLite for testing

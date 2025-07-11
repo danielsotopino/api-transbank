@@ -8,9 +8,9 @@ import sys
 # Add the parent directory to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.database import Base
-from app.models import oneclick_inscription, oneclick_transaction
-from app.config import settings
+from transbank_oneclick_api.database import Base
+from transbank_oneclick_api.models import oneclick_inscription, oneclick_transaction
+from transbank_oneclick_api.config import settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -5,7 +5,7 @@ from .core.exception_handlers import register_exception_handlers
 from .core.logging_config import setup_logging
 from .api.v1.router import api_router
 from .config import settings
-from app.schemas.response_models import ApiResponse
+from transbank_oneclick_api.schemas.response_models import ApiResponse
 
 # Setup logging
 setup_logging()

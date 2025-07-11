@@ -3,7 +3,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from .logging_config import correlation_id_var, endpoint_var, method_var
 from fastapi.responses import JSONResponse
-from app.config import settings
+from transbank_oneclick_api.config import settings
 
 
 class CorrelationMiddleware(BaseHTTPMiddleware):
