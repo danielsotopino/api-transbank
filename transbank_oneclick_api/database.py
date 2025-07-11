@@ -1,20 +1,32 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from .config import settings
-from .models.base import Base
+from transbank_oneclick_api.config import settings
+from transbank_oneclick_api.models.base import Base
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-    pool_recycle=3600,
-    echo=settings.DEBUG
-)
+engine = None
+SessionLocal = None
 
+def init_db(database_url=None):
+    """Initialize database connection"""
+    global engine, SessionLocal
+    
+    if database_url is None:
+        database_url = settings.DATABASE_URL
+    
+    engine = create_engine(database_url)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    
+    # Create all tables if they don't exist
+    Base.metadata.create_all(bind=engine)
+    
+    return engine
 
 def get_db():
+    """Get a database session"""
+    if SessionLocal is None:
+        init_db()
+        
     db = SessionLocal()
     try:
         yield db

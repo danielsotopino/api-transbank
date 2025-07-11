@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, func
 from sqlalchemy.orm import relationship
-from ..database import Base
+from transbank_oneclick_api.models.base import Base
 
 
 class OneclickTransaction(Base):

@@ -6,10 +6,9 @@ import os
 import sys
 
 # Add the parent directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from transbank_oneclick_api.database import Base
-from transbank_oneclick_api.models import oneclick_inscription, oneclick_transaction
+from transbank_oneclick_api.models.base import Base
 from transbank_oneclick_api.config import settings
 
 # this is the Alembic Config object, which provides
@@ -18,7 +17,7 @@ config = context.config
 
 # Set the database URL from settings
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
-
+print("DB URL:", config.get_main_option("sqlalchemy.url"))
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
@@ -27,12 +26,18 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 target_metadata = Base.metadata
-
+print("Target metadata:", target_metadata)
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
+def include_object(object, name, type_, reflected, compare_to):
+    # Solo incluye objetos del esquema 'subscriptions'
+    if hasattr(object, 'schema'):
+        print("Object schema:", object.schema)
+        return object.schema is not None and object.schema in ('transbankoneclick',)
+    return True
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
@@ -66,15 +71,18 @@ def run_migrations_online() -> None:
 
     """
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
+        config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        include_schemas=True,
     )
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            include_schemas=True,
+            version_table_schema='transbankoneclick',
+            include_object=include_object,
         )
 
         with context.begin_transaction():
