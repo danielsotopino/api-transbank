@@ -165,6 +165,7 @@ async def delete_inscription(
         raise
 
 
+
 @router.get("/{username}", response_model=ApiResponse[InscriptionListResponse])
 async def list_user_inscriptions(
     username: str,
