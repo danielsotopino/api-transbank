@@ -23,7 +23,6 @@ setup(
     install_requires=[
         "fastapi==0.104.1",
         "uvicorn[standard]==0.24.0",
-        "psycopg2-binary==2.9.9",
         "transbank-sdk==6.1.0",
         "python-multipart==0.0.6",
         "python-jose[cryptography]==3.3.0",
