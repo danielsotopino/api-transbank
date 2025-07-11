@@ -22,7 +22,7 @@ pip install git+https://github.com/danielsotopino/api-transbank.git@main
 
 ---
 
-## 2. Configuración
+## 2. Configuración de variables de entorno
 
 El paquete espera ciertas variables de entorno para funcionar correctamente. Puedes definirlas en un archivo `.env` o en tu entorno de ejecución:
 
@@ -32,14 +32,26 @@ El paquete espera ciertas variables de entorno para funcionar correctamente. Pue
 - `TRANSBANK_API_KEY`: API Key entregada por Transbank
 - `SECRET_KEY`: Clave secreta para la app
 
-Ejemplo de `.env`:
-```
-DATABASE_URL=postgresql://usuario:password@localhost:5432/mi_db
-TRANSBANK_ENVIRONMENT=integration
-TRANSBANK_COMMERCE_CODE=597055555541
-TRANSBANK_API_KEY=579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C
-SECRET_KEY=supersecreto
-```
+### **Uso de archivos de entorno personalizados**
+
+Por defecto, el paquete carga variables desde `.env`. **Pero si existe un archivo llamado `.env.<NOMBRE_PROYECTO>` y defines la variable de entorno `PROJECT_NAME`, se usará ese archivo.**
+
+**Ejemplo:**
+
+1. Crea un archivo `.env.miapp` con tus variables:
+   ```
+   DATABASE_URL=postgresql://usuario:password@localhost:5432/mi_db
+   ...
+   ```
+2. Antes de ejecutar tu app, exporta el nombre del proyecto:
+   ```sh
+   export PROJECT_NAME=miapp
+   python main.py
+   # O el comando que uses para correr tu app
+   ```
+3. Si no defines `PROJECT_NAME`, se usará `.env` por defecto.
+
+Esto permite que múltiples proyectos en el mismo entorno tengan variables de entorno separadas y no se afecten entre sí.
 
 ---
 

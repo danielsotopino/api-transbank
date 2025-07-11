@@ -1,6 +1,12 @@
+import os
 from pydantic_settings import BaseSettings
 from typing import List, Optional
 
+# Determinar el nombre del archivo de entorno
+project_name = os.getenv("PROJECT_NAME", "transbank-oneclick-api")
+custom_env_file = f".env.{project_name}"
+
+env_file = custom_env_file if os.path.exists(custom_env_file) else ".env"
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Transbank Oneclick API"
@@ -40,8 +46,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_QUERY: int = 1000
     
     class Config:
-        env_file = ".env"
+        env_file = env_file
         case_sensitive = True
-
 
 settings = Settings()
