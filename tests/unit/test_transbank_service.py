@@ -14,10 +14,10 @@ class TestTransbankService:
     @pytest.mark.asyncio
     async def test_start_inscription_success(self, mock_start, transbank_service):
         # Arrange
-        mock_response = Mock()
-        mock_response.token = "test_token_123"
-        mock_response.url_webpay = "https://webpay.transbank.cl/test"
-        mock_start.return_value = mock_response
+        mock_start.return_value = {
+            "token": "test_token_123",
+            "url_webpay": "https://webpay.transbank.cl/test"
+        }
         
         # Act
         result = await transbank_service.start_inscription(
@@ -53,13 +53,13 @@ class TestTransbankService:
     @pytest.mark.asyncio
     async def test_finish_inscription_success(self, mock_finish, transbank_service):
         # Arrange
-        mock_response = Mock()
-        mock_response.response_code = 0
-        mock_response.tbk_user = "user_token_123"
-        mock_response.authorization_code = "auth_123"
-        mock_response.card_type = "VISA"
-        mock_response.card_number = "XXXX-XXXX-XXXX-1234"
-        mock_finish.return_value = mock_response
+        mock_finish.return_value = {
+            "response_code": 0,
+            "tbk_user": "user_token_123",
+            "authorization_code": "auth_123",
+            "card_type": "VISA",
+            "card_number": "XXXX-XXXX-XXXX-1234"
+        }
         
         # Act
         result = await transbank_service.finish_inscription(token="test_token")
@@ -74,9 +74,9 @@ class TestTransbankService:
     @pytest.mark.asyncio
     async def test_finish_inscription_rejected(self, mock_finish, transbank_service):
         # Arrange
-        mock_response = Mock()
-        mock_response.response_code = -1
-        mock_finish.return_value = mock_response
+        mock_finish.return_value = {
+            "response_code": -1
+        }
         
         # Act & Assert
         with pytest.raises(TransactionRejectedException):
@@ -86,26 +86,25 @@ class TestTransbankService:
     @pytest.mark.asyncio
     async def test_authorize_transaction_success(self, mock_authorize, transbank_service):
         # Arrange
-        mock_detail = Mock()
-        mock_detail.amount = 10000
-        mock_detail.response_code = 0
-        mock_detail.status = "approved"
-        mock_detail.authorization_code = "auth_123"
-        mock_detail.payment_type_code = "VN"
-        mock_detail.installments_number = 1
-        mock_detail.commerce_code = "597055555542"
-        mock_detail.buy_order = "order_123"
-        
-        mock_response = Mock()
-        mock_response.parent_buy_order = "parent_order_123"
-        mock_response.session_id = "session_123"
-        mock_response.card_detail.card_number = "XXXX-XXXX-XXXX-1234"
-        mock_response.accounting_date = "0320"
-        mock_response.transaction_date = MagicMock()
-        mock_response.transaction_date.isoformat.return_value = "2023-03-20T10:30:00"
-        mock_response.details = [mock_detail]
-        
-        mock_authorize.return_value = mock_response
+        mock_authorize.return_value = {
+            "parent_buy_order": "parent_order_123",
+            "session_id": "session_123",
+            "card_detail": {"card_number": "XXXX-XXXX-XXXX-1234"},
+            "accounting_date": "0320",
+            "transaction_date": type("dt", (), {"isoformat": lambda self: "2023-03-20T10:30:00"})(),
+            "details": [
+                {
+                    "amount": 10000,
+                    "response_code": 0,
+                    "status": "approved",
+                    "authorization_code": "auth_123",
+                    "payment_type_code": "VN",
+                    "installments_number": 1,
+                    "commerce_code": "597055555542",
+                    "buy_order": "order_123"
+                }
+            ]
+        }
         
         details = [{
             "commerce_code": "597055555542",
@@ -149,27 +148,26 @@ class TestTransbankService:
     @pytest.mark.asyncio
     async def test_get_transaction_status_success(self, mock_status, transbank_service):
         # Arrange
-        mock_detail = Mock()
-        mock_detail.amount = 10000
-        mock_detail.response_code = 0
-        mock_detail.status = "approved"
-        mock_detail.authorization_code = "auth_123"
-        mock_detail.payment_type_code = "VN"
-        mock_detail.installments_number = 1
-        mock_detail.commerce_code = "597055555542"
-        mock_detail.buy_order = "order_123"
-        mock_detail.balance = 0
-        
-        mock_response = Mock()
-        mock_response.buy_order = "order_123"
-        mock_response.session_id = "session_123"
-        mock_response.card_detail.card_number = "XXXX-XXXX-XXXX-1234"
-        mock_response.accounting_date = "0320"
-        mock_response.transaction_date = MagicMock()
-        mock_response.transaction_date.isoformat.return_value = "2023-03-20T10:30:00"
-        mock_response.details = [mock_detail]
-        
-        mock_status.return_value = mock_response
+        mock_status.return_value = {
+            "buy_order": "order_123",
+            "session_id": "session_123",
+            "card_detail": {"card_number": "XXXX-XXXX-XXXX-1234"},
+            "accounting_date": "0320",
+            "transaction_date": type("dt", (), {"isoformat": lambda self: "2023-03-20T10:30:00"})(),
+            "details": [
+                {
+                    "amount": 10000,
+                    "response_code": 0,
+                    "status": "approved",
+                    "authorization_code": "auth_123",
+                    "payment_type_code": "VN",
+                    "installments_number": 1,
+                    "commerce_code": "597055555542",
+                    "buy_order": "order_123",
+                    "balance": 0
+                }
+            ]
+        }
         
         # Act
         result = await transbank_service.get_transaction_status(

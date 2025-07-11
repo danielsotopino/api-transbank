@@ -258,7 +258,7 @@ class TransbankService:
                 "accounting_date": response["accounting_date"],
                 "transaction_date": response["transaction_date"].isoformat(),
                 "details": [{
-                    "amount": detail.amount,
+                    "amount": detail["amount"],
                     "status": "approved" if detail["response_code"] == 0 else "rejected",
                     "authorization_code": detail["authorization_code"],
                     "payment_type_code": detail["payment_type_code"],
@@ -266,7 +266,7 @@ class TransbankService:
                     "installments_number": detail["installments_number"],
                     "commerce_code": detail["commerce_code"],
                     "buy_order": detail["buy_order"],
-                    "balance": getattr(detail, 'balance', None)
+                    "balance": detail.get("balance")
                 } for detail in response["details"]]
             }
             

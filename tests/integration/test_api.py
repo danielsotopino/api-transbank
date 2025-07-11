@@ -8,10 +8,10 @@ class TestInscriptionAPI:
     @patch('app.services.transbank_service.MallInscription.start')
     def test_start_inscription_success(self, mock_start, client, sample_inscription_data):
         # Arrange
-        mock_response = Mock()
-        mock_response.token = "test_token_123"
-        mock_response.url_webpay = "https://webpay.transbank.cl/test"
-        mock_start.return_value = mock_response
+        mock_start.return_value = {
+            "token": "test_token_123",
+            "url_webpay": "https://webpay.transbank.cl/test"
+        }
         
         # Act
         response = client.post(
@@ -50,13 +50,13 @@ class TestInscriptionAPI:
     @patch('app.services.transbank_service.MallInscription.finish')
     def test_finish_inscription_success(self, mock_finish, client, db_session):
         # Arrange
-        mock_response = Mock()
-        mock_response.response_code = 0
-        mock_response.tbk_user = "user_token_123"
-        mock_response.authorization_code = "auth_123"
-        mock_response.card_type = "VISA"
-        mock_response.card_number = "XXXX-XXXX-XXXX-1234"
-        mock_finish.return_value = mock_response
+        mock_finish.return_value = {
+            "response_code": 0,
+            "tbk_user": "user_token_123",
+            "authorization_code": "auth_123",
+            "card_type": "VISA",
+            "card_number": "XXXX-XXXX-XXXX-1234"
+        }
         
         finish_data = {"token": "test_token_123", "username": "testuser"}
         
@@ -111,26 +111,25 @@ class TestTransactionAPI:
         db_session.commit()
         
         # Mock Transbank response
-        mock_detail = Mock()
-        mock_detail.amount = 10000
-        mock_detail.response_code = 0
-        mock_detail.status = "approved"
-        mock_detail.authorization_code = "auth_123"
-        mock_detail.payment_type_code = "VN"
-        mock_detail.installments_number = 1
-        mock_detail.commerce_code = "597055555542"
-        mock_detail.buy_order = "child_order_1"
-        
-        mock_response = Mock()
-        mock_response.parent_buy_order = sample_transaction_data["parent_buy_order"]
-        mock_response.session_id = "session_123"
-        mock_response.card_detail.card_number = "XXXX-XXXX-XXXX-1234"
-        mock_response.accounting_date = "0320"
-        mock_response.transaction_date = Mock()
-        mock_response.transaction_date.isoformat.return_value = "2023-03-20T10:30:00Z"
-        mock_response.details = [mock_detail]
-        
-        mock_authorize.return_value = mock_response
+        mock_authorize.return_value = {
+            "parent_buy_order": sample_transaction_data["parent_buy_order"],
+            "session_id": "session_123",
+            "card_detail": {"card_number": "XXXX-XXXX-XXXX-1234"},
+            "accounting_date": "0320",
+            "transaction_date": type("dt", (), {"isoformat": lambda self: "2023-03-20T10:30:00Z"})(),
+            "details": [
+                {
+                    "amount": 10000,
+                    "response_code": 0,
+                    "status": "approved",
+                    "authorization_code": "auth_123",
+                    "payment_type_code": "VN",
+                    "installments_number": 1,
+                    "commerce_code": "597055555542",
+                    "buy_order": "child_order_1"
+                }
+            ]
+        }
         
         # Act
         response = client.post(
