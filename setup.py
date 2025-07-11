@@ -26,7 +26,7 @@ setup(
         "transbank-sdk==6.1.0",
         "python-multipart==0.0.6",
         "python-jose[cryptography]==3.3.0",
-        "passlib[bcrypt]==1.7.4"
+        "passlib[bcrypt]==1.7.4",
         "structlog"
     ],
     extras_require={
