@@ -1,15 +1,15 @@
 from typing import List, Dict, Any
+import structlog
 from transbank.webpay.oneclick.mall_inscription import MallInscription
 from transbank.webpay.oneclick.mall_transaction import MallTransaction, MallTransactionAuthorizeDetails
+
 from ..config import settings
-from ..core.structured_logger import StructuredLogger
 from ..core.exceptions import (
     TransbankCommunicationException,
     TransactionRejectedException
 )
 
-logger = StructuredLogger(__name__)
-
+logger = structlog.get_logger(__name__)
 
 class TransbankService:
 
@@ -45,8 +45,13 @@ class TransbankService:
     async def start_inscription(self, username: str, email: str, response_url: str) -> Dict[str, Any]:
         """Start card inscription process"""
         try:
-            logger.with_contexts(username=username, email=email, response_url=response_url).info(
-                "Iniciando proceso de inscripción"
+            logger.info(
+                "Iniciando proceso de inscripción",
+                context={
+                    "username": username,
+                    "email": email,
+                    "response_url": response_url
+                }
             )
             
             response = self.mall_inscription.start(
@@ -62,15 +67,22 @@ class TransbankService:
                 "url_webpay": response["url_webpay"]
             }
             
-            logger.with_contexts(username=username, token=response["token"][:10] + "...").info(
-                "Inscripción iniciada exitosamente"
+            logger.info(
+                "Inscripción iniciada exitosamente",
+                context={
+                    "username": username,
+                    "token": response["token"][:10] + "..."
+                }
             )
             
             return result
             
         except Exception as e:
-            logger.with_contexts(username=username).error(
+            logger.error(
                 f"Error iniciando inscripción: {str(e)}",
+                context={
+                    "username": username
+                },
                 error={"type": type(e).__name__, "message": str(e)}
             )
             raise TransbankCommunicationException(str(e))
@@ -78,8 +90,11 @@ class TransbankService:
     async def finish_inscription(self, token: str) -> Dict[str, Any]:
         """Finish card inscription process"""
         try:
-            logger.with_contexts(token=token[:10] + "...").info(
-                "Finalizando proceso de inscripción"
+            logger.info(
+                "Finalizando proceso de inscripción",
+                context={
+                    "token": token[:10] + "..."
+                }
             )
             
             response = self.mall_inscription.finish(token)
@@ -98,12 +113,13 @@ class TransbankService:
                 "card_number": response["card_number"]
             }
             
-            logger.with_contexts(
-                tbk_user=response["tbk_user"][:10] + "...",
-                card_type=response["card_type"],
-                card_number=response["card_number"]
-            ).info(
-                "Inscripción finalizada exitosamente"
+            logger.info(
+                "Inscripción finalizada exitosamente",
+                context={
+                    "tbk_user": response["tbk_user"][:10] + "...",
+                    "card_type": response["card_type"],
+                    "card_number": response["card_number"]
+                }
             )
             
             return result
@@ -111,8 +127,11 @@ class TransbankService:
         except TransactionRejectedException:
             raise
         except Exception as e:
-            logger.with_contexts(token=token).error(
+            logger.error(
                 f"Error finalizando inscripción: {str(e)}",
+                context={
+                    "token": token
+                },
                 error={"type": type(e).__name__, "message": str(e)}
             )
             raise TransbankCommunicationException(str(e))
@@ -120,21 +139,32 @@ class TransbankService:
     async def delete_inscription(self, tbk_user: str, username: str) -> Dict[str, Any]:
         """Delete card inscription"""
         try:
-            logger.with_contexts(username=username, tbk_user=tbk_user[:10] + "...").info(
-                "Eliminando inscripción"
+            logger.info(
+                "Eliminando inscripción",
+                context={
+                    "username": username,
+                    "tbk_user": tbk_user[:10] + "..."
+                }
             )
             
             response = self.mall_inscription.delete(tbk_user, username)
             
-            logger.with_contexts(username=username, tbk_user=tbk_user[:10] + "...").info(
-                "Inscripción eliminada exitosamente"
+            logger.info(
+                "Inscripción eliminada exitosamente",
+                context={
+                    "username": username,
+                    "tbk_user": tbk_user[:10] + "..."
+                }
             )
             
             return {"deleted": True}
             
         except Exception as e:
-            logger.with_contexts(username=username).error(
+            logger.error(
                 f"Error eliminando inscripción: {str(e)}",
+                context={
+                    "username": username
+                },
                 error={"type": type(e).__name__, "message": str(e)}
             )
             raise TransbankCommunicationException(str(e))
@@ -143,60 +173,72 @@ class TransbankService:
         self,
         username: str,
         tbk_user: str,
-        parent_buy_order: str,
+        buy_order: str,
         details: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Authorize mall transaction"""
         try:
-            logger.with_contexts(
-                username=username,
-                parent_buy_order=parent_buy_order,
-                tbk_user=tbk_user[:10] + "...",
-                details_count=len(details)
-            ).info(
-                "Autorizando transacción mall"
+            logger.info(
+                "Autorizando transacción mall",
+                context={
+                    "username": username,
+                    "buy_order": buy_order,
+                    "tbk_user": tbk_user[:10] + "...",
+                    "details_count": len(details)
+                }
             )
             
             # Create transaction details
-            # TODO: Revisar esta parte como realizar los cobros
             transaction_details = MallTransactionAuthorizeDetails(
                 commerce_code=details[0]["commerce_code"],
-                buy_order=details[0]["buy_order"],
-                installments_number=details[0]["installments_number"],
+                buy_order=buy_order,
+                installments_number=0,
                 amount=details[0]["amount"]
             )
-            for detail in details:
-                transaction_details.add(
-                    commerce_code=detail["commerce_code"],
-                    buy_order=detail["buy_order"],
-                    installments_number=detail["installments_number"],
-                    amount=detail["amount"]
-                )
             
             response = self.mall_transaction.authorize(
                 username=username,
                 tbk_user=tbk_user,
-                parent_buy_order=parent_buy_order,
+                parent_buy_order=buy_order,
                 details=transaction_details
             )
             
             # Process response details
+            print('response', response)
+
             result_details = []
             for detail in response["details"]:
                 if detail["response_code"] != 0:
-                    logger.with_contexts(
-                        username=username,
-                        commerce_code=detail["commerce_code"],
-                        response_code=detail["response_code"],
-                        buy_order=detail["buy_order"],
-                        amount=detail["amount"]
-                    ).warning(
-                        f"Transacción rechazada para comercio {detail['commerce_code']}"
+                    logger.warning(
+                        f"Transacción rechazada para comercio {detail['commerce_code']}",
+                        context={
+                            "username": username,
+                            "commerce_code": detail["commerce_code"],
+                            "response_code": detail["response_code"],
+                            "buy_order": detail["buy_order"],
+                            "amount": detail["amount"]
+                        }
                     )
                 
+                # payment_type_code values:
+                # VD = Venta Débito
+                # VP = Venta prepago
+                # VN = Venta Normal
+                # VC = Venta en cuotas
+                # SI = 3 cuotas sin interés
+                # S2 = 2 cuotas sin interés
+                # NC = N Cuotas sin interés
+                #
+                # response_code values:
+                # 0 = Transacción aprobada
+                # Oneclick specific codes:
+                # -96 = tbk_user no existente
+                # -97 = Límites Oneclick, máximo monto diario de pago excedido
+                # -98 = Límites Oneclick, máximo monto de pago excedido
+                # -99 = Límites Oneclick, máxima cantidad de pagos diarios excedido
                 result_details.append({
                     "amount": detail["amount"],
-                    "status": "approved" if detail["response_code"] == 0 else "rejected",
+                    "status": "AUTHORIZED" if detail["response_code"] == 0 else "REJECTED",
                     "authorization_code": detail["authorization_code"],
                     "payment_type_code": detail["payment_type_code"],
                     "response_code": detail["response_code"],
@@ -206,30 +248,32 @@ class TransbankService:
                 })
             
             result = {
-                "parent_buy_order": response["parent_buy_order"],
-                "session_id": response["session_id"],
+                "buy_order": response["buy_order"],
                 "card_detail": {
                     "card_number": response["card_detail"]["card_number"]
                 },
                 "accounting_date": response["accounting_date"],
-                "transaction_date": response["transaction_date"].isoformat(),
+                "transaction_date": response["transaction_date"],
                 "details": result_details
             }
             
-            logger.with_contexts(
-                username=username,
-                parent_buy_order=parent_buy_order,
-                session_id=response["session_id"],
-                approved_count=len([d for d in result_details if d["status"] == "approved"])
-            ).info(
-                "Transacción autorizada exitosamente"
+            logger.info(
+                "Transacción autorizada exitosamente",
+                context={
+                    "username": username,
+                    "buy_order": buy_order,
+                    "approved_count": len([d for d in result_details if d["status"] == "AUTHORIZED"])
+                }
             )
             
             return result
             
         except Exception as e:
-            logger.with_contexts(username=username).error(
+            logger.error(
                 f"Error autorizando transacción: {str(e)}",
+                context={
+                    "username": username
+                },
                 error={"type": type(e).__name__, "message": str(e)}
             )
             raise TransbankCommunicationException(str(e))
@@ -241,8 +285,12 @@ class TransbankService:
     ) -> Dict[str, Any]:
         """Get transaction status"""
         try:
-            logger.with_contexts(child_buy_order=child_buy_order, child_commerce_code=child_commerce_code).info(
-                "Consultando estado de transacción"
+            logger.info(
+                "Consultando estado de transacción",
+                context={
+                    "child_buy_order": child_buy_order,
+                    "child_commerce_code": child_commerce_code
+                }
             )
             
             response = self.mall_transaction.status(
@@ -251,7 +299,6 @@ class TransbankService:
             
             result = {
                 "buy_order": response["buy_order"],
-                "session_id": response["session_id"],
                 "card_detail": {
                     "card_number": response["card_detail"]["card_number"]
                 },
@@ -259,7 +306,7 @@ class TransbankService:
                 "transaction_date": response["transaction_date"].isoformat(),
                 "details": [{
                     "amount": detail["amount"],
-                    "status": "approved" if detail["response_code"] == 0 else "rejected",
+                    "status": "AUTHORIZED" if detail["response_code"] == 0 else "rejected",
                     "authorization_code": detail["authorization_code"],
                     "payment_type_code": detail["payment_type_code"],
                     "response_code": detail["response_code"],
@@ -270,15 +317,22 @@ class TransbankService:
                 } for detail in response["details"]]
             }
             
-            logger.with_contexts(child_buy_order=child_buy_order).info(
-                "Estado de transacción obtenido exitosamente"
+            logger.info(
+                "Estado de transacción obtenido exitosamente",
+                context={
+                    "child_buy_order": child_buy_order
+                }
             )
             
             return result
             
         except Exception as e:
-            logger.with_contexts(child_buy_order=child_buy_order, child_commerce_code=child_commerce_code).error(
+            logger.error(
                 f"Error consultando estado de transacción: {str(e)}",
+                context={
+                    "child_buy_order": child_buy_order,
+                    "child_commerce_code": child_commerce_code
+                },
                 error={"type": type(e).__name__, "message": str(e)}
             )
             raise TransbankCommunicationException(str(e))
@@ -292,8 +346,14 @@ class TransbankService:
     ) -> Dict[str, Any]:
         """Capture deferred transaction"""
         try:
-            logger.with_contexts(child_commerce_code=child_commerce_code, child_buy_order=child_buy_order, authorization_code=authorization_code, capture_amount=capture_amount).info(
-                "Capturando transacción diferida"
+            logger.info(
+                "Capturando transacción diferida",
+                context={
+                    "child_commerce_code": child_commerce_code,
+                    "child_buy_order": child_buy_order,
+                    "authorization_code": authorization_code,
+                    "capture_amount": capture_amount
+                }
             )
             
             response = self.mall_transaction.capture(
@@ -310,15 +370,23 @@ class TransbankService:
                 "response_code": response["response_code"]
             }
             
-            logger.with_contexts(child_buy_order=child_buy_order, captured_amount=capture_amount).info(
-                "Transacción capturada exitosamente"
+            logger.info(
+                "Transacción capturada exitosamente",
+                context={
+                    "child_buy_order": child_buy_order,
+                    "captured_amount": capture_amount
+                }
             )
             
             return result
             
         except Exception as e:
-            logger.with_contexts(child_buy_order=child_buy_order, capture_amount=capture_amount).error(
+            logger.error(
                 f"Error capturando transacción: {str(e)}",
+                context={
+                    "child_buy_order": child_buy_order,
+                    "capture_amount": capture_amount
+                },
                 error={"type": type(e).__name__, "message": str(e)}
             )
             raise TransbankCommunicationException(str(e))
@@ -331,8 +399,14 @@ class TransbankService:
     ) -> Dict[str, Any]:
         """Refund transaction"""
         try:
-            logger.with_contexts(child_commerce_code=child_commerce_code, child_buy_order=child_buy_order, amount=amount).info(
-                "Reversando transacción"
+            logger.info(
+                "Reversando transacción",
+                context={
+                    "child_commerce_code": child_commerce_code,
+                    "child_buy_order": child_buy_order,
+                    "amount": amount
+                }
+                
             )
             
             response = self.mall_transaction.refund(
@@ -348,15 +422,23 @@ class TransbankService:
                 "reversed_amount": getattr(response, 'reversed_amount', amount)
             }
             
-            logger.with_contexts(child_buy_order=child_buy_order, reversed_amount=amount).info(
-                "Transacción reversada exitosamente"
+            logger.info(
+                "Transacción reversada exitosamente",
+                context={
+                    "child_buy_order": child_buy_order,
+                    "reversed_amount": amount
+                }
             )
             
             return result
             
         except Exception as e:
-            logger.with_contexts(child_buy_order=child_buy_order, amount=amount).error(
+            logger.error(
                 f"Error reversando transacción: {str(e)}",
+                context={
+                    "child_buy_order": child_buy_order,
+                    "amount": amount
+                },
                 error={"type": type(e).__name__, "message": str(e)}
             )
             raise TransbankCommunicationException(str(e))

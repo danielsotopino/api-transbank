@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from transbank_oneclick_api.core.logging_middleware import LoggingMiddleware
 from .core.middleware import CorrelationMiddleware, TransbankHeaderMiddleware
 from .core.exception_handlers import register_exception_handlers
 from .core.logging_config import setup_logging
@@ -8,7 +10,7 @@ from .config import settings
 from transbank_oneclick_api.schemas.response_models import ApiResponse
 
 # Setup logging
-setup_logging()
+setup_logging(log_level="DEBUG", json_logs=False)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -20,6 +22,10 @@ app = FastAPI(
 # Middleware
 app.add_middleware(CorrelationMiddleware)
 app.add_middleware(TransbankHeaderMiddleware)
+app.add_middleware(
+    LoggingMiddleware,
+    skip_paths=["/health", "/metrics", "/api/docs", "/openapi.json", "/api/redoc"]
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_HOSTS,

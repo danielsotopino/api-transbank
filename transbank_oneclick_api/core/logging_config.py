@@ -4,6 +4,8 @@ import os
 from datetime import datetime
 from contextvars import ContextVar
 from typing import Optional
+import structlog
+import sys
 
 correlation_id_var: ContextVar[Optional[str]] = ContextVar('correlation_id', default=None)
 endpoint_var: ContextVar[Optional[str]] = ContextVar('endpoint', default=None)
@@ -35,18 +37,49 @@ class StructuredFormatter(logging.Formatter):
         return json.dumps(log_entry)
 
 
-def setup_logging():
-    """Configure structured logging"""
-    handler = logging.StreamHandler()
-    handler.setFormatter(StructuredFormatter())
+def setup_logging(log_level: str = "INFO", json_logs: bool = True):
+    """
+    Configura structlog para la aplicación FastAPI
     
-    # Configure root logger
+    Args:
+        log_level: Nivel de logging (DEBUG, INFO, WARNING, ERROR)
+        json_logs: Si usar formato JSON o formato legible para desarrollo
+    """
+    
+    # Configurar el logging estándar de Python
     logging.basicConfig(
-        level=getattr(logging, os.getenv("LOG_LEVEL", "INFO")),
-        handlers=[handler],
-        format='%(message)s'
+        format="%(message)s",
+        stream=sys.stdout,
+        level=getattr(logging, log_level.upper()),
     )
     
-    # Reduce noise from external libraries
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
+    # Procesadores comunes
+    shared_processors = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
+    
+    if json_logs:
+        # Procesadores para producción (JSON)
+        processors = shared_processors + [
+            structlog.processors.dict_tracebacks,
+            structlog.processors.JSONRenderer()
+        ]
+    else:
+        # Procesadores para desarrollo (más legible)
+        processors = shared_processors + [
+            structlog.processors.ExceptionPrettyPrinter(),
+            structlog.dev.ConsoleRenderer(colors=True)
+        ]
+    
+    # Configurar structlog
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )

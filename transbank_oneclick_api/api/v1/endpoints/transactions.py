@@ -22,15 +22,15 @@ from transbank_oneclick_api.schemas.oneclick_schemas import (
 from transbank_oneclick_api.schemas.response_models import ApiResponse
 from transbank_oneclick_api.models.oneclick_transaction import OneclickTransaction, OneclickTransactionDetail
 from transbank_oneclick_api.models.oneclick_inscription import OneclickInscription
-from transbank_oneclick_api.core.structured_logger import StructuredLogger
 from transbank_oneclick_api.core.exceptions import (
     UserNotFoundedException,
     InscriptionNotFoundException,
     OrdenCompraDuplicadaException
 )
+import structlog
 
 router = APIRouter()
-logger = StructuredLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @router.post("/authorize", response_model=ApiResponse[TransactionAuthorizeResponse])
@@ -52,12 +52,11 @@ async def authorize_transaction(
         # Find inscription
         inscription = db.query(OneclickInscription).filter(
             OneclickInscription.username == request.username,
-            OneclickInscription.tbk_user == request.tbk_user,
             OneclickInscription.is_active == True
         ).first()
         
         if not inscription:
-            raise InscriptionNotFoundException(request.tbk_user)
+            raise InscriptionNotFoundException(inscription.username)
         
         # Prepare transaction details for Transbank
         details = [
@@ -69,12 +68,14 @@ async def authorize_transaction(
             }
             for detail in request.details
         ]
+
+        
         
         # Authorize with Transbank
         result = await transbank_service.authorize_transaction(
             username=request.username,
-            tbk_user=request.tbk_user,
-            parent_buy_order=request.parent_buy_order,
+            tbk_user=inscription.tbk_user,
+            buy_order=request.parent_buy_order,
             details=details
         )
         
@@ -87,7 +88,7 @@ async def authorize_transaction(
             username=request.username,
             inscription_id=inscription.id,
             parent_buy_order=request.parent_buy_order,
-            session_id=result["session_id"],
+            # session_id=result["session_id"],
             transaction_date=datetime.fromisoformat(result["transaction_date"].replace("Z", "+00:00")),
             accounting_date=result["accounting_date"],
             total_amount=total_amount,
@@ -135,25 +136,33 @@ async def authorize_transaction(
         ]
         
         response_data = TransactionAuthorizeResponse(
-            parent_buy_order=result["parent_buy_order"],
-            session_id=result["session_id"],
+            parent_buy_order=result["buy_order"],
+            # session_id=result["session_id"],
             card_detail=result["card_detail"],
             accounting_date=result["accounting_date"],
             transaction_date=result["transaction_date"],
             details=response_details
         )
         
-        logger.with_contexts(username=request.username, transaction_id=transaction.id, parent_buy_order=request.parent_buy_order, total_amount=total_amount, details_count=len(details)).info(
-            "Transaction authorized successfully"
+        logger.info(
+            "Transaction authorized successfully",
+            context={
+                "username": request.username,
+                "transaction_id": transaction.id,
+                "parent_buy_order": request.parent_buy_order,
+                "total_amount": total_amount,
+                "details_count": len(details)
+            }
         )
         
         return ApiResponse.success_response(response_data)
         
     except Exception as e:
-        logger.with_context("username", request.username).error(
+        logger.error(
             f"Error authorizing transaction: {str(e)}",
             error={"type": type(e).__name__, "message": str(e)}
         )
+        print('request', request)
         raise
 
 
@@ -187,7 +196,7 @@ async def get_transaction_status(
         
         response_data = TransactionStatusResponse(
             buy_order=result["buy_order"],
-            session_id=result["session_id"],
+            # session_id=result["session_id"],
             card_detail=result["card_detail"],
             accounting_date=result["accounting_date"],
             transaction_date=result["transaction_date"],
@@ -361,15 +370,24 @@ async def get_transaction_history(
             }
         )
         
-        logger.with_contexts(username=username, page=page, limit=limit, total=total).info(
-            f"Retrieved {len(transaction_items)} transactions"
+        logger.info(
+            f"Retrieved {len(transaction_items)} transactions",
+            context={
+                "username": username,
+                "page": page,
+                "limit": limit,
+                "total": total
+            }
         )
         
         return ApiResponse.success_response(response_data)
         
     except Exception as e:
-        logger.with_context("username", username).error(
+        logger.error(
             f"Error getting transaction history: {str(e)}",
+            context={
+                "username": username
+            },
             error={"type": type(e).__name__, "message": str(e)}
         )
         raise

@@ -19,15 +19,15 @@ from transbank_oneclick_api.schemas.oneclick_schemas import (
 )
 from transbank_oneclick_api.schemas.response_models import ApiResponse
 from transbank_oneclick_api.models.oneclick_inscription import OneclickInscription
-from transbank_oneclick_api.core.structured_logger import StructuredLogger
 from transbank_oneclick_api.core.exceptions import (
     UserNotFoundedException,
     InscriptionNotFoundException
 )
 from transbank_oneclick_api.config import settings
+import structlog
 
 router = APIRouter()
-logger = StructuredLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @router.post("/start", response_model=ApiResponse[InscriptionStartResponse])
@@ -124,17 +124,16 @@ async def delete_inscription(
     try:
         # Find inscription in database
         inscription = db.query(OneclickInscription).filter(
-            OneclickInscription.tbk_user == request.tbk_user,
             OneclickInscription.username == request.username,
             OneclickInscription.is_active == True
         ).first()
         
         if not inscription:
-            raise InscriptionNotFoundException(request.tbk_user)
+            raise InscriptionNotFoundException(request.username)
         
         # Delete from Transbank
         await transbank_service.delete_inscription(
-            tbk_user=request.tbk_user,
+            tbk_user=inscription.tbk_user,
             username=request.username
         )
         
@@ -144,7 +143,7 @@ async def delete_inscription(
         db.commit()
         
         response_data = InscriptionDeleteResponse(
-            tbk_user=request.tbk_user,
+            tbk_user=inscription.tbk_user,
             username=request.username,
             status="deleted",
             deletion_date=datetime.utcnow()

@@ -3,10 +3,9 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from .exceptions import DomainException
 from ..schemas.response_models import ApiResponse, ApiError
-from .structured_logger import StructuredLogger
+import structlog
 
-logger = StructuredLogger(__name__)
-
+logger = structlog.get_logger(__name__)
 
 async def domain_exception_handler(request: Request, exc: DomainException):
     logger.warning(
@@ -50,9 +49,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             code="VALIDATION_ERROR",
             message=f"{field_name}: {error['msg']}"
         ))
-    
-    logger.warning(
-        "Validation error",
+    print('errors', exc.errors())
+    logger.error(
+        event="Validation error",
         context={
             "errors": [{"field": err.code, "message": err.message} for err in errors],
             "endpoint": str(request.url.path),

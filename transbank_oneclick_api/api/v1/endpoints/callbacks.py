@@ -3,15 +3,14 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 import uuid
 from datetime import datetime
-
+import structlog
 from transbank_oneclick_api.database import get_db
 from transbank_oneclick_api.services.transbank_service import TransbankService
 from transbank_oneclick_api.api.deps import get_transbank_service
 from transbank_oneclick_api.models.oneclick_inscription import OneclickInscription
-from transbank_oneclick_api.core.structured_logger import StructuredLogger
 
 router = APIRouter()
-logger = StructuredLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @router.get("/inscription/result", response_class=HTMLResponse)

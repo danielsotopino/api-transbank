@@ -29,7 +29,6 @@ class InscriptionFinishResponse(BaseModel):
 
 
 class InscriptionDeleteRequest(BaseModel):
-    tbk_user: str = Field(..., description="User token to delete")
     username: str = Field(..., description="Username associated with inscription")
 
 
@@ -65,7 +64,6 @@ class TransactionDetail(BaseModel):
 
 class TransactionAuthorizeRequest(BaseModel):
     username: str = Field(..., description="User owner of the card")
-    tbk_user: str = Field(..., description="User token obtained in finish")
     parent_buy_order: str = Field(..., description="Unique parent buy order")
     details: List[TransactionDetail] = Field(..., min_items=1, description="Transaction details")
 
@@ -84,7 +82,7 @@ class TransactionDetailResponse(BaseModel):
 
 class TransactionAuthorizeResponse(BaseModel):
     parent_buy_order: str
-    session_id: str
+    session_id: Optional[str] = None
     card_detail: dict
     accounting_date: str
     transaction_date: str
