@@ -160,7 +160,8 @@ async def authorize_transaction(
     except Exception as e:
         logger.error(
             f"Error authorizing transaction: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)}
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True
         )
         print('request', request)
         raise
@@ -216,7 +217,8 @@ async def get_transaction_status(
     except Exception as e:
         logger.error(
             f"Error getting transaction status: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)}
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True
         )
         raise
 
@@ -255,7 +257,8 @@ async def capture_transaction(
     except Exception as e:
         logger.error(
             f"Error capturing transaction: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)}
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True
         )
         raise
 
@@ -292,7 +295,8 @@ async def refund_transaction(
     except Exception as e:
         logger.error(
             f"Error refunding transaction: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)}
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True
         )
         raise
 
@@ -388,6 +392,7 @@ async def get_transaction_history(
             context={
                 "username": username
             },
-            error={"type": type(e).__name__, "message": str(e)}
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True
         )
         raise

@@ -98,7 +98,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             client_ip=client_ip,
             user_agent=user_agent,
             request_size=request_size,
-            headers=dict(request.headers) if logger.isEnabledFor(10) else None,  # Solo en DEBUG
+            # headers=dict(request.headers) if logger.isEnabledFor(10) else None,  # Solo en DEBUG
         )
     
     async def _log_request_success(

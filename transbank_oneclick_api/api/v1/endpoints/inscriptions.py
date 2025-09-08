@@ -54,7 +54,8 @@ async def start_inscription(
     except Exception as e:
         logger.error(
             f"Error starting inscription: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)}
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True
         )
         raise
 
@@ -109,7 +110,8 @@ async def finish_inscription(
     except Exception as e:
         logger.error(
             f"Error finishing inscription: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)}
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True
         )
         raise
 
@@ -159,7 +161,8 @@ async def delete_inscription(
     except Exception as e:
         logger.error(
             f"Error deleting inscription: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)}
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True
         )
         raise
 
@@ -205,6 +208,7 @@ async def list_user_inscriptions(
     except Exception as e:
         logger.error(
             f"Error retrieving inscriptions: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)}
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True
         )
         raise

@@ -83,7 +83,8 @@ class TransbankService:
                 context={
                     "username": username
                 },
-                error={"type": type(e).__name__, "message": str(e)}
+                error={"type": type(e).__name__, "message": str(e)},
+                exc_info=True
             )
             raise TransbankCommunicationException(str(e))
     
@@ -132,7 +133,8 @@ class TransbankService:
                 context={
                     "token": token
                 },
-                error={"type": type(e).__name__, "message": str(e)}
+                error={"type": type(e).__name__, "message": str(e)},
+                exc_info=True
             )
             raise TransbankCommunicationException(str(e))
     
@@ -165,7 +167,8 @@ class TransbankService:
                 context={
                     "username": username
                 },
-                error={"type": type(e).__name__, "message": str(e)}
+                error={"type": type(e).__name__, "message": str(e)},
+                exc_info=True
             )
             raise TransbankCommunicationException(str(e))
     
@@ -274,7 +277,8 @@ class TransbankService:
                 context={
                     "username": username
                 },
-                error={"type": type(e).__name__, "message": str(e)}
+                error={"type": type(e).__name__, "message": str(e)},
+                exc_info=True
             )
             raise TransbankCommunicationException(str(e))
     
@@ -333,7 +337,8 @@ class TransbankService:
                     "child_buy_order": child_buy_order,
                     "child_commerce_code": child_commerce_code
                 },
-                error={"type": type(e).__name__, "message": str(e)}
+                error={"type": type(e).__name__, "message": str(e)},
+                exc_info=True
             )
             raise TransbankCommunicationException(str(e))
     
@@ -439,6 +444,7 @@ class TransbankService:
                     "child_buy_order": child_buy_order,
                     "amount": amount
                 },
-                error={"type": type(e).__name__, "message": str(e)}
+                error={"type": type(e).__name__, "message": str(e)},
+                exc_info=True
             )
             raise TransbankCommunicationException(str(e))
