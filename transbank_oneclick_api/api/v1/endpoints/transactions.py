@@ -1,11 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from typing import List, Optional
-import uuid
-import json
-from datetime import datetime
+from fastapi import APIRouter, Depends, Query
+from typing import Optional
+import structlog
 
-from transbank_oneclick_api.database import get_db
 from transbank_oneclick_api.services.transbank_service import TransbankService
 from transbank_oneclick_api.api.deps import get_transbank_service
 from transbank_oneclick_api.schemas.oneclick_schemas import (
@@ -16,18 +12,13 @@ from transbank_oneclick_api.schemas.oneclick_schemas import (
     TransactionCaptureResponse,
     TransactionRefundRequest,
     TransactionRefundResponse,
-    TransactionHistoryResponse,
-    TransactionDetailResponse
+    TransactionHistoryResponse
 )
 from transbank_oneclick_api.schemas.response_models import ApiResponse
-from transbank_oneclick_api.models.oneclick_transaction import OneclickTransaction, OneclickTransactionDetail
-from transbank_oneclick_api.models.oneclick_inscription import OneclickInscription
 from transbank_oneclick_api.core.exceptions import (
-    UserNotFoundedException,
     InscriptionNotFoundException,
     OrdenCompraDuplicadaException
 )
-import structlog
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -36,134 +27,50 @@ logger = structlog.get_logger(__name__)
 @router.post("/authorize", response_model=ApiResponse[TransactionAuthorizeResponse])
 async def authorize_transaction(
     request: TransactionAuthorizeRequest,
-    transbank_service: TransbankService = Depends(get_transbank_service),
-    db: Session = Depends(get_db)
+    transbank_service: TransbankService = Depends(get_transbank_service)
 ):
-    """Authorize mall transaction using inscribed card"""
-    try:
-        # Check if parent_buy_order already exists
-        existing_transaction = db.query(OneclickTransaction).filter(
-            OneclickTransaction.parent_buy_order == request.parent_buy_order
-        ).first()
-        
-        if existing_transaction:
-            raise OrdenCompraDuplicadaException(request.parent_buy_order)
-        
-        # Find inscription
-        inscription = db.query(OneclickInscription).filter(
-            OneclickInscription.username == request.username,
-            OneclickInscription.is_active == True
-        ).first()
-        
-        if not inscription:
-            raise InscriptionNotFoundException(inscription.username)
-        
-        # Prepare transaction details for Transbank
-        details = [
-            {
-                "commerce_code": detail.commerce_code,
-                "buy_order": detail.buy_order,
-                "amount": detail.amount,
-                "installments_number": detail.installments_number
-            }
-            for detail in request.details
-        ]
+    """
+    Authorize mall transaction using inscribed card.
 
-        
-        
-        # Authorize with Transbank
+    Router responsibilities:
+    - Validate input (Pydantic)
+    - Call service for authorization
+    - Return standardized response
+
+    Service handles ALL business logic:
+    - Check for duplicate orders
+    - Verify inscription exists
+    - Call Transbank API
+    - Persist transaction
+    - Database commit/rollback
+    """
+    try:
+        logger.info("Authorizing transaction endpoint", username=request.username)
+
+        # Service handles all validation, business logic, and DB operations
         result = await transbank_service.authorize_transaction(
             username=request.username,
-            tbk_user=inscription.tbk_user,
             buy_order=request.parent_buy_order,
-            details=details
+            details=[detail.model_dump() for detail in request.details]
         )
-        
-        # Calculate total amount
-        total_amount = sum(detail.amount for detail in request.details)
-        
-        # Save transaction to database
-        transaction = OneclickTransaction(
-            id=str(uuid.uuid4()),
-            username=request.username,
-            inscription_id=inscription.id,
-            parent_buy_order=request.parent_buy_order,
-            # session_id=result["session_id"],
-            transaction_date=datetime.fromisoformat(result["transaction_date"].replace("Z", "+00:00")),
-            accounting_date=result["accounting_date"],
-            total_amount=total_amount,
-            card_number_masked=result["card_detail"]["card_number"],
-            status="processed",
-            raw_response=json.dumps(result)
-        )
-        
-        db.add(transaction)
-        db.flush()  # Get the transaction ID
-        
-        # Save transaction details
-        for detail_data in result["details"]:
-            detail = OneclickTransactionDetail(
-                id=str(uuid.uuid4()),
-                transaction_id=transaction.id,
-                commerce_code=detail_data["commerce_code"],
-                buy_order=detail_data["buy_order"],
-                amount=detail_data["amount"],
-                authorization_code=detail_data.get("authorization_code"),
-                payment_type_code=detail_data.get("payment_type_code"),
-                response_code=detail_data["response_code"],
-                installments_number=detail_data["installments_number"],
-                status=detail_data["status"],
-                balance=detail_data.get("balance")
-            )
-            db.add(detail)
-        
-        db.commit()
-        
-        # Prepare response
-        response_details = [
-            TransactionDetailResponse(
-                amount=detail["amount"],
-                status=detail["status"],
-                authorization_code=detail.get("authorization_code"),
-                payment_type_code=detail.get("payment_type_code"),
-                response_code=detail["response_code"],
-                installments_number=detail["installments_number"],
-                commerce_code=detail["commerce_code"],
-                buy_order=detail["buy_order"],
-                balance=detail.get("balance")
-            )
-            for detail in result["details"]
-        ]
-        
-        response_data = TransactionAuthorizeResponse(
-            parent_buy_order=result["buy_order"],
-            # session_id=result["session_id"],
-            card_detail=result["card_detail"],
-            accounting_date=result["accounting_date"],
-            transaction_date=result["transaction_date"],
-            details=response_details
-        )
-        
+
         logger.info(
             "Transaction authorized successfully",
-            context={
-                "username": request.username,
-                "transaction_id": transaction.id,
-                "parent_buy_order": request.parent_buy_order,
-                "total_amount": total_amount,
-                "details_count": len(details)
-            }
+            username=request.username,
+            parent_buy_order=request.parent_buy_order
         )
-        
-        return ApiResponse.success_response(response_data)
-        
+
+        return ApiResponse.success_response(result)
+
+    except (OrdenCompraDuplicadaException, InscriptionNotFoundException):
+        raise
     except Exception as e:
         logger.error(
-            f"Error authorizing transaction: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)},
+            "Error authorizing transaction",
+            error_type=type(e).__name__,
+            error=str(e),
             exc_info=True
         )
-        print('request', request)
         raise
 
 
@@ -173,51 +80,41 @@ async def get_transaction_status(
     child_commerce_code: str = Query(..., description="Child commerce code"),
     transbank_service: TransbankService = Depends(get_transbank_service)
 ):
-    """Get transaction status from Transbank"""
+    """
+    Get transaction status from Transbank.
+
+    Router responsibilities:
+    - Validate input
+    - Call service
+    - Return standardized response
+
+    Service returns Pydantic schema directly.
+    """
     try:
+        logger.info(
+            "Getting transaction status endpoint",
+            child_buy_order=child_buy_order,
+            child_commerce_code=child_commerce_code
+        )
+
+        # Service returns TransactionStatusResponse (Pydantic)
         result = await transbank_service.get_transaction_status(
             child_buy_order=child_buy_order,
             child_commerce_code=child_commerce_code
         )
-        
-        response_details = [
-            TransactionDetailResponse(
-                amount=detail["amount"],
-                status=detail["status"],
-                authorization_code=detail.get("authorization_code"),
-                payment_type_code=detail.get("payment_type_code"),
-                response_code=detail["response_code"],
-                installments_number=detail["installments_number"],
-                commerce_code=detail["commerce_code"],
-                buy_order=detail["buy_order"],
-                balance=detail.get("balance")
-            )
-            for detail in result["details"]
-        ]
-        
-        response_data = TransactionStatusResponse(
-            buy_order=result["buy_order"],
-            # session_id=result["session_id"],
-            card_detail=result["card_detail"],
-            accounting_date=result["accounting_date"],
-            transaction_date=result["transaction_date"],
-            details=response_details
-        )
-        
+
         logger.info(
             "Transaction status retrieved successfully",
-            context={
-                "child_buy_order": child_buy_order,
-                "child_commerce_code": child_commerce_code
-            }
+            child_buy_order=child_buy_order
         )
-        
-        return ApiResponse.success_response(response_data)
-        
+
+        return ApiResponse.success_response(result)
+
     except Exception as e:
         logger.error(
-            f"Error getting transaction status: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)},
+            "Error getting transaction status",
+            error_type=type(e).__name__,
+            error=str(e),
             exc_info=True
         )
         raise
@@ -228,36 +125,44 @@ async def capture_transaction(
     request: TransactionCaptureRequest,
     transbank_service: TransbankService = Depends(get_transbank_service)
 ):
-    """Capture deferred transaction"""
+    """
+    Capture deferred transaction.
+
+    Router responsibilities:
+    - Validate input (Pydantic)
+    - Call service
+    - Return standardized response
+
+    Service returns Pydantic schema directly.
+    """
     try:
+        logger.info(
+            "Capturing transaction endpoint",
+            child_buy_order=request.child_buy_order,
+            capture_amount=request.capture_amount
+        )
+
+        # Service returns TransactionCaptureResponse (Pydantic)
         result = await transbank_service.capture_transaction(
             child_commerce_code=request.child_commerce_code,
             child_buy_order=request.child_buy_order,
             authorization_code=request.authorization_code,
             capture_amount=request.capture_amount
         )
-        
-        response_data = TransactionCaptureResponse(
-            authorization_code=result["authorization_code"],
-            authorization_date=result["authorization_date"],
-            captured_amount=result["captured_amount"],
-            response_code=result["response_code"]
-        )
-        
+
         logger.info(
             "Transaction captured successfully",
-            context={
-                "child_buy_order": request.child_buy_order,
-                "captured_amount": request.capture_amount
-            }
+            child_buy_order=request.child_buy_order,
+            captured_amount=request.capture_amount
         )
-        
-        return ApiResponse.success_response(response_data)
-        
+
+        return ApiResponse.success_response(result)
+
     except Exception as e:
         logger.error(
-            f"Error capturing transaction: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)},
+            "Error capturing transaction",
+            error_type=type(e).__name__,
+            error=str(e),
             exc_info=True
         )
         raise
@@ -268,34 +173,43 @@ async def refund_transaction(
     request: TransactionRefundRequest,
     transbank_service: TransbankService = Depends(get_transbank_service)
 ):
-    """Refund/reverse transaction"""
+    """
+    Refund/reverse transaction.
+
+    Router responsibilities:
+    - Validate input (Pydantic)
+    - Call service
+    - Return standardized response
+
+    Service returns Pydantic schema directly.
+    """
     try:
+        logger.info(
+            "Refunding transaction endpoint",
+            child_buy_order=request.child_buy_order,
+            amount=request.amount
+        )
+
+        # Service returns TransactionRefundResponse (Pydantic)
         result = await transbank_service.refund_transaction(
             child_commerce_code=request.child_commerce_code,
             child_buy_order=request.child_buy_order,
             amount=request.amount
         )
-        
-        response_data = TransactionRefundResponse(
-            type=result["type"],
-            response_code=result["response_code"],
-            reversed_amount=result["reversed_amount"]
-        )
-        
+
         logger.info(
             "Transaction refunded successfully",
-            context={
-                "child_buy_order": request.child_buy_order,
-                "reversed_amount": request.amount
-            }
+            child_buy_order=request.child_buy_order,
+            reversed_amount=request.amount
         )
-        
-        return ApiResponse.success_response(response_data)
-        
+
+        return ApiResponse.success_response(result)
+
     except Exception as e:
         logger.error(
-            f"Error refunding transaction: {str(e)}",
-            error={"type": type(e).__name__, "message": str(e)},
+            "Error refunding transaction",
+            error_type=type(e).__name__,
+            error=str(e),
             exc_info=True
         )
         raise
@@ -309,90 +223,55 @@ async def get_transaction_history(
     status: Optional[str] = Query(None, description="Filter by status"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(50, ge=1, le=200, description="Results per page"),
-    db: Session = Depends(get_db)
+    transbank_service: TransbankService = Depends(get_transbank_service)
 ):
-    """Get transaction history for a user"""
+    """
+    Get transaction history for a user.
+
+    Router responsibilities:
+    - Validate input (Pydantic + Query params)
+    - Call service for data retrieval
+    - Return standardized response
+
+    Service handles:
+    - Repository queries
+    - ORM to Pydantic conversion
+    - Pagination logic
+    - Filtering (start_date, end_date, status)
+    """
     try:
-        # Build query
-        query = db.query(OneclickTransaction).filter(
-            OneclickTransaction.username == username
-        )
-        
-        if start_date:
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-            query = query.filter(OneclickTransaction.transaction_date >= start_dt)
-        
-        if end_date:
-            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-            query = query.filter(OneclickTransaction.transaction_date <= end_dt)
-        
-        if status:
-            query = query.filter(OneclickTransaction.status == status)
-        
-        # Get total count
-        total = query.count()
-        
-        # Apply pagination
-        offset = (page - 1) * limit
-        transactions = query.offset(offset).limit(limit).all()
-        
-        # Prepare response
-        transaction_items = []
-        for transaction in transactions:
-            detail_responses = [
-                TransactionDetailResponse(
-                    amount=detail.amount,
-                    status=detail.status,
-                    authorization_code=detail.authorization_code,
-                    payment_type_code=detail.payment_type_code,
-                    response_code=detail.response_code,
-                    installments_number=detail.installments_number,
-                    commerce_code=detail.commerce_code,
-                    buy_order=detail.buy_order,
-                    balance=detail.balance
-                )
-                for detail in transaction.details
-            ]
-            
-            transaction_items.append({
-                "parent_buy_order": transaction.parent_buy_order,
-                "transaction_date": transaction.transaction_date.isoformat(),
-                "total_amount": transaction.total_amount,
-                "card_number": transaction.card_number_masked,
-                "status": transaction.status,
-                "details": detail_responses
-            })
-        
-        response_data = TransactionHistoryResponse(
-            username=username,
-            transactions=transaction_items,
-            pagination={
-                "page": page,
-                "limit": limit,
-                "total": total,
-                "total_pages": (total + limit - 1) // limit
-            }
-        )
-        
         logger.info(
-            f"Retrieved {len(transaction_items)} transactions",
-            context={
-                "username": username,
-                "page": page,
-                "limit": limit,
-                "total": total
-            }
+            "Getting transaction history endpoint",
+            username=username,
+            page=page,
+            limit=limit
         )
-        
-        return ApiResponse.success_response(response_data)
-        
+
+        # Service handles all data retrieval and conversion
+        result = await transbank_service.get_transaction_history(
+            username=username,
+            start_date=start_date,
+            end_date=end_date,
+            status=status,
+            page=page,
+            limit=limit
+        )
+
+        logger.info(
+            "Retrieved transaction history",
+            username=username,
+            count=len(result.transactions),
+            page=page
+        )
+
+        return ApiResponse.success_response(result)
+
     except Exception as e:
         logger.error(
-            f"Error getting transaction history: {str(e)}",
-            context={
-                "username": username
-            },
-            error={"type": type(e).__name__, "message": str(e)},
+            "Error getting transaction history",
+            username=username,
+            error_type=type(e).__name__,
+            error=str(e),
             exc_info=True
         )
         raise

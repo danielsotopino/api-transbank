@@ -1,3 +1,4 @@
+import uuid
 from sqlalchemy import Column, String, DateTime, Boolean, Text, func
 from sqlalchemy.orm import relationship
 from transbank_oneclick_api.models.base import Base
@@ -7,7 +8,7 @@ class OneclickInscription(Base):
     __tablename__ = 'oneclick_inscriptions'
     __table_args__ = {'schema': 'transbankoneclick'}
     
-    id = Column(String(36), primary_key=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     username = Column(String(256), nullable=False, index=True)
     email = Column(String(254), nullable=True)
     tbk_user = Column(Text, nullable=False)  # Encrypted

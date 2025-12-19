@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
@@ -11,6 +11,8 @@ class InscriptionStartRequest(BaseModel):
 
 
 class InscriptionStartResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     token: str = Field(..., description="Session token for inscription process")
     url_webpay: str = Field(..., description="URL to redirect to Transbank")
 
@@ -21,6 +23,8 @@ class InscriptionFinishRequest(BaseModel):
 
 
 class InscriptionFinishResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     tbk_user: str = Field(..., description="Permanent user token")
     response_code: int = Field(..., description="Response code (0 = success)")
     authorization_code: str = Field(..., description="Authorization code")
@@ -33,6 +37,8 @@ class InscriptionDeleteRequest(BaseModel):
 
 
 class InscriptionDeleteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     tbk_user: str
     username: str
     status: str = "deleted"
@@ -40,12 +46,16 @@ class InscriptionDeleteResponse(BaseModel):
 
 
 class InscriptionListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     username: str
     inscriptions: List['InscriptionInfo']
     total_inscriptions: int
 
 
 class InscriptionInfo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     tbk_user: str
     card_type: str
     card_number: str
@@ -69,6 +79,8 @@ class TransactionAuthorizeRequest(BaseModel):
 
 
 class TransactionDetailResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     amount: int
     status: str
     authorization_code: Optional[str]
@@ -81,6 +93,8 @@ class TransactionDetailResponse(BaseModel):
 
 
 class TransactionAuthorizeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     parent_buy_order: str
     session_id: Optional[str] = None
     card_detail: dict
@@ -90,6 +104,8 @@ class TransactionAuthorizeResponse(BaseModel):
 
 
 class TransactionStatusResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     buy_order: str
     session_id: str
     card_detail: dict
@@ -106,6 +122,8 @@ class TransactionCaptureRequest(BaseModel):
 
 
 class TransactionCaptureResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     authorization_code: str
     authorization_date: str
     captured_amount: int
@@ -119,18 +137,24 @@ class TransactionRefundRequest(BaseModel):
 
 
 class TransactionRefundResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     type: str
     response_code: int
     reversed_amount: int
 
 
 class TransactionHistoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     username: str
     transactions: List['TransactionHistoryItem']
     pagination: dict
 
 
 class TransactionHistoryItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     parent_buy_order: str
     transaction_date: str
     total_amount: int

@@ -1,24 +1,74 @@
-from typing import List, Dict, Any
+from datetime import datetime, timezone
+from typing import List
+import uuid
 import structlog
+from sqlalchemy.orm import Session
+from fastapi import Depends
 from transbank.webpay.oneclick.mall_inscription import MallInscription
 from transbank.webpay.oneclick.mall_transaction import MallTransaction, MallTransactionAuthorizeDetails
 
+from transbank_oneclick_api.domain.entities.inscription import (
+    InscriptionEntity,
+    InscriptionStatus,
+    CardDetails
+)
+from transbank_oneclick_api.domain.entities.transaction import (
+    TransactionEntity,
+    TransactionDetail,
+    Amount,
+    TransactionStatus,
+    PaymentType
+)
+
 from ..config import settings
+from ..database import get_db
+from ..repositories.inscription_repository import InscriptionRepository
+from ..repositories.transaction_repository import TransactionRepository
+from ..schemas.oneclick_schemas import (
+    InscriptionFinishRequest,
+    InscriptionStartRequest,
+    InscriptionStartResponse,
+    InscriptionFinishResponse,
+    TransactionAuthorizeResponse,
+    TransactionDetailResponse,
+    TransactionStatusResponse,
+    TransactionRefundResponse,
+    TransactionCaptureResponse
+)
 from ..core.exceptions import (
     TransbankCommunicationException,
-    TransactionRejectedException
+    TransactionRejectedException,
+    InscriptionNotFoundException
 )
 
 logger = structlog.get_logger(__name__)
 
+
 class TransbankService:
+    """
+    Service layer for Transbank Oneclick operations.
+
+    Responsibilities:
+    - Business logic and Transbank SDK integration
+    - Transaction management (commit/rollback)
+    - Converts ORM models to Pydantic schemas
+    - Orchestrates repository calls
+    """
 
     mall_inscription: MallInscription
     mall_transaction: MallTransaction
 
-    def __init__(self):
+    def __init__(
+        self,
+        db: Session = Depends(get_db),
+        inscription_repo: InscriptionRepository = InscriptionRepository(),
+        transaction_repo: TransactionRepository = TransactionRepository()
+    ):
+        self.db = db
+        self.inscription_repo = inscription_repo
+        self.transaction_repo = transaction_repo
         self._configure_transbank()
-    
+
     def _configure_transbank(self):
         """Configure Transbank SDK based on environment"""
         if settings.TRANSBANK_ENVIRONMENT == "production":
@@ -41,410 +91,656 @@ class TransbankService:
                 api_key=settings.TRANSBANK_API_KEY
             )
             logger.info("Transbank configured for integration/testing")
-    
-    async def start_inscription(self, username: str, email: str, response_url: str) -> Dict[str, Any]:
-        """Start card inscription process"""
+
+    async def start_inscription(
+        self,
+        request: InscriptionStartRequest
+    ) -> InscriptionStartResponse:
+        """
+        Start card inscription process.
+
+        Args:
+            username: User identifier
+            email: User email
+            response_url: URL for callback
+
+        Returns:
+            InscriptionStartResponse: Pydantic schema (NOT ORM model)
+
+        Raises:
+            TransbankCommunicationException: If Transbank API call fails
+        """
         try:
             logger.info(
                 "Iniciando proceso de inscripción",
-                context={
-                    "username": username,
-                    "email": email,
-                    "response_url": response_url
-                }
-            )
-            
-            response = self.mall_inscription.start(
-                username=username,
-                email=email,
-                response_url=response_url
+                username=request.username,
+                email=request.email,
+                response_url=request.response_url
             )
 
-            logger.info(f"Response: {response}")
-            
-            result = {
-                "token": response["token"],
-                "url_webpay": response["url_webpay"]
-            }
-            
+            response = self.mall_inscription.start(
+                username=request.username,
+                email=request.email,
+                response_url=request.response_url
+            )
+
             logger.info(
                 "Inscripción iniciada exitosamente",
-                context={
-                    "username": username,
-                    "token": response["token"][:10] + "..."
-                }
+                username=request.username,
+                token_prefix=response["token"][:10]
             )
-            
-            return result
-            
+
+            return InscriptionStartResponse.model_validate(response)
+
         except Exception as e:
+            self.db.rollback()
             logger.error(
-                f"Error iniciando inscripción: {str(e)}",
-                context={
-                    "username": username
-                },
-                error={"type": type(e).__name__, "message": str(e)},
+                "Error iniciando inscripción",
+                username=request.username,
+                error_type=type(e).__name__,
+                error=str(e),
                 exc_info=True
             )
             raise TransbankCommunicationException(str(e))
-    
-    async def finish_inscription(self, token: str) -> Dict[str, Any]:
-        """Finish card inscription process"""
+
+    async def finish_inscription(self, request: InscriptionFinishRequest) -> InscriptionFinishResponse:
+        """
+        Finish card inscription process.
+
+        Args:
+            token: Inscription token from start_inscription
+
+        Returns:
+            InscriptionFinishResponse: Pydantic schema (NOT ORM model)
+
+        Raises:
+            TransactionRejectedException: If Transbank rejects inscription
+            TransbankCommunicationException: If Transbank API call fails
+        """
         try:
             logger.info(
                 "Finalizando proceso de inscripción",
-                context={
-                    "token": token[:10] + "..."
-                }
+                token_prefix=request.token[:10]
             )
-            
-            response = self.mall_inscription.finish(token)
-            
+
+            # 1. Call Transbank API
+            response = self.mall_inscription.finish(request.token)
+
             if response["response_code"] != 0:
                 raise TransactionRejectedException(
                     response["response_code"],
                     "Inscripción rechazada por Transbank"
                 )
-            
-            result = {
-                "tbk_user": response["tbk_user"],
-                "response_code": response["response_code"],
-                "authorization_code": response["authorization_code"],
-                "card_type": response["card_type"],
-                "card_number": response["card_number"]
-            }
-            
+
+            # 2. Create Domain Entity
+            card_details = CardDetails(
+                card_type=response["card_type"],
+                card_number=response["card_number"]
+            )
+
+            inscription_entity = InscriptionEntity(
+                username=request.username,
+                email=request.username,  # No disponible en el resultado, requiere refactor para persistir desde start
+                tbk_user=response["tbk_user"],
+                url_webpay="",  # Not available in finish response
+                status=InscriptionStatus.COMPLETED,
+                card_details=card_details,
+                authorization_code=response["authorization_code"],
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
+            )
+
+            # 3. Save via repository (returns Domain Entity)
+            saved_entity = self.inscription_repo.save_entity(inscription_entity)
+
+            # 4. Commit transaction
+            self.db.commit()
+
             logger.info(
                 "Inscripción finalizada exitosamente",
-                context={
-                    "tbk_user": response["tbk_user"][:10] + "...",
-                    "card_type": response["card_type"],
-                    "card_number": response["card_number"]
-                }
+                tbk_user_prefix=response["tbk_user"][:10],
+                card_type=response["card_type"],
+                card_number=response["card_number"]
             )
-            
-            return result
-            
-        except TransactionRejectedException:
+
+            # 5. Convert Domain Entity to Pydantic schema
+            return InscriptionFinishResponse(
+                tbk_user=saved_entity.tbk_user,
+                response_code=response["response_code"],
+                authorization_code=saved_entity.authorization_code,
+                card_type=saved_entity.card_details.card_type if saved_entity.card_details else "",
+                card_number=saved_entity.card_details.card_number if saved_entity.card_details else ""
+            )
+
+        except (TransactionRejectedException, ValueError):
             raise
         except Exception as e:
+            self.db.rollback()
             logger.error(
-                f"Error finalizando inscripción: {str(e)}",
-                context={
-                    "token": token
-                },
-                error={"type": type(e).__name__, "message": str(e)},
+                "Error finalizando inscripción",
+                token=request.token,
+                error_type=type(e).__name__,
+                error=str(e),
                 exc_info=True
             )
             raise TransbankCommunicationException(str(e))
-    
-    async def delete_inscription(self, tbk_user: str, username: str) -> Dict[str, Any]:
-        """Delete card inscription"""
+
+    async def delete_inscription(self, tbk_user: str, username: str) -> bool:
+        """
+        Delete card inscription.
+
+        Args:
+            tbk_user: Transbank user token
+            username: User identifier
+
+        Returns:
+            dict: Deletion confirmation
+
+        Raises:
+            TransbankCommunicationException: If Transbank API call fails
+        """
         try:
             logger.info(
                 "Eliminando inscripción",
-                context={
-                    "username": username,
-                    "tbk_user": tbk_user[:10] + "..."
-                }
+                username=username,
+                tbk_user_prefix=tbk_user[:10]
             )
-            
-            response = self.mall_inscription.delete(tbk_user, username)
-            
+
+            # Use entity method to get inscription
+            inscription_entity = self.inscription_repo.find_active_by_username_entity(username)
+
+            if not inscription_entity:
+                raise InscriptionNotFoundException(username)
+
+            self.mall_inscription.delete(tbk_user, username)
+
+            self.inscription_repo.delete(inscription_entity.id)
+
+            self.db.commit()
+
             logger.info(
                 "Inscripción eliminada exitosamente",
-                context={
-                    "username": username,
-                    "tbk_user": tbk_user[:10] + "..."
-                }
+                username=username,
+                tbk_user_prefix=tbk_user[:10]
             )
-            
-            return {"deleted": True}
-            
+
+            return True
+
+        except (InscriptionNotFoundException,):
+            raise
         except Exception as e:
+            self.db.rollback()
             logger.error(
-                f"Error eliminando inscripción: {str(e)}",
-                context={
-                    "username": username
-                },
-                error={"type": type(e).__name__, "message": str(e)},
+                "Error eliminando inscripción",
+                username=username,
+                error_type=type(e).__name__,
+                error=str(e),
                 exc_info=True
             )
             raise TransbankCommunicationException(str(e))
-    
+
     async def authorize_transaction(
         self,
         username: str,
-        tbk_user: str,
         buy_order: str,
-        details: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """Authorize mall transaction"""
+        details: List[dict]
+    ) -> TransactionAuthorizeResponse:
+        """
+        Authorize mall transaction.
+
+        Args:
+            username: User identifier
+            buy_order: Parent buy order
+            details: List of transaction details
+
+        Returns:
+            TransactionAuthorizeResponse: Pydantic schema with nested details
+
+        Raises:
+            InscriptionNotFoundException: If inscription not found
+            OrdenCompraDuplicadaException: If buy_order already exists
+            TransbankCommunicationException: If Transbank API call fails
+        """
         try:
             logger.info(
                 "Autorizando transacción mall",
-                context={
-                    "username": username,
-                    "buy_order": buy_order,
-                    "tbk_user": tbk_user[:10] + "...",
-                    "details_count": len(details)
-                }
+                username=username,
+                buy_order=buy_order,
+                details_count=len(details)
             )
-            
-            # Create transaction details
+
+            # 1. Check for duplicate buy_order using Domain Entity
+            existing_transaction = self.transaction_repo.find_by_buy_order_entity(buy_order)
+            if existing_transaction:
+                from ..core.exceptions import OrdenCompraDuplicadaException
+                raise OrdenCompraDuplicadaException(buy_order)
+
+            # 2. Verify inscription exists (using Domain Entity)
+            inscription_entity = self.inscription_repo.find_active_by_username_entity(username)
+            if not inscription_entity:
+                raise InscriptionNotFoundException(username)
+
+            # 3. Create transaction details for Transbank SDK
             transaction_details = MallTransactionAuthorizeDetails(
                 commerce_code=details[0]["commerce_code"],
                 buy_order=buy_order,
                 installments_number=0,
                 amount=details[0]["amount"]
             )
-            
+
+            # 4. Call Transbank API
             response = self.mall_transaction.authorize(
                 username=username,
-                tbk_user=tbk_user,
+                tbk_user=inscription_entity.tbk_user,
                 parent_buy_order=buy_order,
                 details=transaction_details
             )
-            
-            # Process response details
-            print('response', response)
 
-            result_details = []
-            for detail in response["details"]:
-                if detail["response_code"] != 0:
+            logger.debug("Response received from Transbank", buy_order=buy_order)
+
+            # 5. Create Transaction Domain Entity
+            transaction_entity = TransactionEntity(
+                username=username,
+                buy_order=buy_order,
+                card_number=response.get("card_detail", {}).get("card_number"),
+                accounting_date=response.get("accounting_date"),
+                transaction_date=response.get("transaction_date"),
+                created_at=datetime.now(timezone.utc)
+            )
+
+            # 6. Add transaction details to entity
+            for detail_dict in response["details"]:
+                if detail_dict["response_code"] != 0:
                     logger.warning(
-                        f"Transacción rechazada para comercio {detail['commerce_code']}",
-                        context={
-                            "username": username,
-                            "commerce_code": detail["commerce_code"],
-                            "response_code": detail["response_code"],
-                            "buy_order": detail["buy_order"],
-                            "amount": detail["amount"]
-                        }
+                        "Transacción rechazada para comercio",
+                        commerce_code=detail_dict['commerce_code'],
+                        response_code=detail_dict["response_code"],
+                        buy_order=detail_dict["buy_order"],
+                        amount=detail_dict["amount"]
                     )
-                
-                # payment_type_code values:
-                # VD = Venta Débito
-                # VP = Venta prepago
-                # VN = Venta Normal
-                # VC = Venta en cuotas
-                # SI = 3 cuotas sin interés
-                # S2 = 2 cuotas sin interés
-                # NC = N Cuotas sin interés
-                #
-                # response_code values:
-                # 0 = Transacción aprobada
-                # Oneclick specific codes:
-                # -96 = tbk_user no existente
-                # -97 = Límites Oneclick, máximo monto diario de pago excedido
-                # -98 = Límites Oneclick, máximo monto de pago excedido
-                # -99 = Límites Oneclick, máxima cantidad de pagos diarios excedido
-                result_details.append({
-                    "amount": detail["amount"],
-                    "status": "AUTHORIZED" if detail["response_code"] == 0 else "REJECTED",
-                    "authorization_code": detail["authorization_code"],
-                    "payment_type_code": detail["payment_type_code"],
-                    "response_code": detail["response_code"],
-                    "installments_number": detail["installments_number"],
-                    "commerce_code": detail["commerce_code"],
-                    "buy_order": detail["buy_order"]
-                })
-            
-            result = {
-                "buy_order": response["buy_order"],
-                "card_detail": {
-                    "card_number": response["card_detail"]["card_number"]
-                },
-                "accounting_date": response["accounting_date"],
-                "transaction_date": response["transaction_date"],
-                "details": result_details
-            }
-            
+
+                # Create TransactionDetail entity
+                detail_entity = TransactionDetail(
+                    commerce_code=detail_dict["commerce_code"],
+                    buy_order=detail_dict["buy_order"],
+                    amount=Amount(value=detail_dict["amount"]),
+                    status=TransactionStatus.AUTHORIZED if detail_dict["response_code"] == 0 else TransactionStatus.FAILED,
+                    authorization_code=detail_dict.get("authorization_code"),
+                    payment_type_code=PaymentType(detail_dict["payment_type_code"]) if detail_dict.get("payment_type_code") else None,
+                    response_code=detail_dict.get("response_code"),
+                    installments_number=detail_dict.get("installments_number")
+                )
+
+                transaction_entity.add_detail(detail_entity)
+
+            # 7. Save via repository (converts entity to ORM internally)
+            saved_entity = self.transaction_repo.save_entity(transaction_entity)
+
+            # 8. Commit transaction
+            self.db.commit()
+
             logger.info(
                 "Transacción autorizada exitosamente",
-                context={
-                    "username": username,
-                    "buy_order": buy_order,
-                    "approved_count": len([d for d in result_details if d["status"] == "AUTHORIZED"])
-                }
+                username=username,
+                buy_order=buy_order,
+                approved_count=len(saved_entity.get_authorized_details())
             )
-            
-            return result
-            
+
+            # 9. Convert Domain Entity to Pydantic schema
+            return self._transaction_entity_to_pydantic(saved_entity)
+
+        except (InscriptionNotFoundException, ValueError):
+            raise
         except Exception as e:
+            self.db.rollback()
             logger.error(
-                f"Error autorizando transacción: {str(e)}",
-                context={
-                    "username": username
-                },
-                error={"type": type(e).__name__, "message": str(e)},
+                "Error autorizando transacción",
+                username=username,
+                error_type=type(e).__name__,
+                error=str(e),
                 exc_info=True
             )
             raise TransbankCommunicationException(str(e))
-    
+
     async def get_transaction_status(
         self,
         child_buy_order: str,
         child_commerce_code: str
-    ) -> Dict[str, Any]:
-        """Get transaction status"""
+    ) -> TransactionStatusResponse:
+        """
+        Get transaction status.
+
+        Args:
+            child_buy_order: Child buy order
+            child_commerce_code: Child commerce code
+
+        Returns:
+            TransactionStatusResponse: Pydantic schema
+
+        Raises:
+            TransbankCommunicationException: If Transbank API call fails
+        """
         try:
             logger.info(
                 "Consultando estado de transacción",
-                context={
-                    "child_buy_order": child_buy_order,
-                    "child_commerce_code": child_commerce_code
-                }
+                child_buy_order=child_buy_order,
+                child_commerce_code=child_commerce_code
             )
-            
+
+            # Call Transbank API (no DB persistence for status query)
             response = self.mall_transaction.status(
                 buy_order=child_buy_order
             )
-            
-            result = {
-                "buy_order": response["buy_order"],
-                "card_detail": {
-                    "card_number": response["card_detail"]["card_number"]
-                },
-                "accounting_date": response["accounting_date"],
-                "transaction_date": response["transaction_date"].isoformat(),
-                "details": [{
-                    "amount": detail["amount"],
-                    "status": "AUTHORIZED" if detail["response_code"] == 0 else "rejected",
-                    "authorization_code": detail["authorization_code"],
-                    "payment_type_code": detail["payment_type_code"],
-                    "response_code": detail["response_code"],
-                    "installments_number": detail["installments_number"],
-                    "commerce_code": detail["commerce_code"],
-                    "buy_order": detail["buy_order"],
-                    "balance": detail.get("balance")
-                } for detail in response["details"]]
-            }
-            
+
+            # Transform response to Pydantic schema
+            result = TransactionStatusResponse(
+                buy_order=response["buy_order"],
+                session_id=response.get("session_id", ""),
+                card_detail=response["card_detail"],
+                accounting_date=response["accounting_date"],
+                transaction_date=response["transaction_date"].isoformat(),
+                details=[
+                    TransactionDetailResponse(
+                        amount=detail["amount"],
+                        status="AUTHORIZED" if detail["response_code"] == 0 else "REJECTED",
+                        authorization_code=detail["authorization_code"],
+                        payment_type_code=detail["payment_type_code"],
+                        response_code=detail["response_code"],
+                        installments_number=detail["installments_number"],
+                        commerce_code=detail["commerce_code"],
+                        buy_order=detail["buy_order"]
+                    )
+                    for detail in response["details"]
+                ]
+            )
+
             logger.info(
                 "Estado de transacción obtenido exitosamente",
-                context={
-                    "child_buy_order": child_buy_order
-                }
+                child_buy_order=child_buy_order
             )
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(
-                f"Error consultando estado de transacción: {str(e)}",
-                context={
-                    "child_buy_order": child_buy_order,
-                    "child_commerce_code": child_commerce_code
-                },
-                error={"type": type(e).__name__, "message": str(e)},
+                "Error consultando estado de transacción",
+                child_buy_order=child_buy_order,
+                child_commerce_code=child_commerce_code,
+                error_type=type(e).__name__,
+                error=str(e),
                 exc_info=True
             )
             raise TransbankCommunicationException(str(e))
-    
+
     async def capture_transaction(
         self,
         child_commerce_code: str,
         child_buy_order: str,
         authorization_code: str,
         capture_amount: int
-    ) -> Dict[str, Any]:
-        """Capture deferred transaction"""
+    ) -> TransactionCaptureResponse:
+        """
+        Capture deferred transaction.
+
+        Args:
+            child_commerce_code: Child commerce code
+            child_buy_order: Child buy order
+            authorization_code: Authorization code
+            capture_amount: Amount to capture
+
+        Returns:
+            TransactionCaptureResponse: Pydantic schema
+
+        Raises:
+            TransbankCommunicationException: If Transbank API call fails
+        """
         try:
             logger.info(
                 "Capturando transacción diferida",
-                context={
-                    "child_commerce_code": child_commerce_code,
-                    "child_buy_order": child_buy_order,
-                    "authorization_code": authorization_code,
-                    "capture_amount": capture_amount
-                }
+                child_commerce_code=child_commerce_code,
+                child_buy_order=child_buy_order,
+                authorization_code=authorization_code,
+                capture_amount=capture_amount
             )
-            
+
             response = self.mall_transaction.capture(
                 child_commerce_code=child_commerce_code,
                 child_buy_order=child_buy_order,
                 authorization_code=authorization_code,
                 capture_amount=capture_amount
             )
-            
-            result = {
-                "authorization_code": response["authorization_code"],
-                "authorization_date": response["authorization_date"].isoformat(),
-                "captured_amount": response["captured_amount"],
-                "response_code": response["response_code"]
-            }
-            
+
+            result = TransactionCaptureResponse(
+                authorization_code=response["authorization_code"],
+                authorization_date=response["authorization_date"].isoformat(),
+                captured_amount=response["captured_amount"],
+                response_code=response["response_code"]
+            )
+
             logger.info(
                 "Transacción capturada exitosamente",
-                context={
-                    "child_buy_order": child_buy_order,
-                    "captured_amount": capture_amount
-                }
+                child_buy_order=child_buy_order,
+                captured_amount=capture_amount
             )
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(
-                f"Error capturando transacción: {str(e)}",
-                context={
-                    "child_buy_order": child_buy_order,
-                    "capture_amount": capture_amount
-                },
-                error={"type": type(e).__name__, "message": str(e)}
+                "Error capturando transacción",
+                child_buy_order=child_buy_order,
+                capture_amount=capture_amount,
+                error_type=type(e).__name__,
+                error=str(e)
             )
             raise TransbankCommunicationException(str(e))
-    
+
     async def refund_transaction(
         self,
         child_commerce_code: str,
         child_buy_order: str,
         amount: int
-    ) -> Dict[str, Any]:
-        """Refund transaction"""
+    ) -> TransactionRefundResponse:
+        """
+        Refund transaction.
+
+        Args:
+            child_commerce_code: Child commerce code
+            child_buy_order: Child buy order
+            amount: Amount to refund
+
+        Returns:
+            TransactionRefundResponse: Pydantic schema
+
+        Raises:
+            TransbankCommunicationException: If Transbank API call fails
+        """
         try:
             logger.info(
                 "Reversando transacción",
-                context={
-                    "child_commerce_code": child_commerce_code,
-                    "child_buy_order": child_buy_order,
-                    "amount": amount
-                }
-                
-            )
-            
-            response = self.mall_transaction.refund(
                 child_commerce_code=child_commerce_code,
                 child_buy_order=child_buy_order,
-                amount=amount,
-                buy_order=child_buy_order
+                amount=amount
             )
-            
-            result = {
-                "type": response["type"],
-                "response_code": response["response_code"],
-                "reversed_amount": getattr(response, 'reversed_amount', amount)
-            }
-            
+
+            response = self.mall_transaction.refund(
+                buy_order=child_buy_order,
+                child_commerce_code=child_commerce_code,
+                child_buy_order=child_buy_order,
+                amount=amount
+            )
+
+            result = TransactionRefundResponse(
+                type=response["type"],
+                response_code=response["response_code"],
+                reversed_amount=getattr(response, 'reversed_amount', amount)
+            )
+
             logger.info(
                 "Transacción reversada exitosamente",
-                context={
-                    "child_buy_order": child_buy_order,
-                    "reversed_amount": amount
-                }
+                child_buy_order=child_buy_order,
+                reversed_amount=amount
             )
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(
-                f"Error reversando transacción: {str(e)}",
-                context={
-                    "child_buy_order": child_buy_order,
-                    "amount": amount
-                },
-                error={"type": type(e).__name__, "message": str(e)},
+                "Error reversando transacción",
+                child_buy_order=child_buy_order,
+                amount=amount,
+                error_type=type(e).__name__,
+                error=str(e),
                 exc_info=True
             )
             raise TransbankCommunicationException(str(e))
+
+    async def get_transaction_history(
+        self,
+        username: str,
+        start_date: str = None,
+        end_date: str = None,
+        status: str = None,
+        page: int = 1,
+        limit: int = 50
+    ):
+        """
+        Get transaction history for a user.
+
+        Args:
+            username: User identifier
+            start_date: Optional start date filter (YYYY-MM-DD)
+            end_date: Optional end date filter (YYYY-MM-DD)
+            status: Optional status filter
+            page: Page number (1-indexed)
+            limit: Results per page
+
+        Returns:
+            TransactionHistoryResponse: Pydantic schema with transactions and pagination
+
+        Note:
+            Currently implements basic pagination.
+            TODO: Add date and status filtering in repository layer.
+        """
+        try:
+            from ..schemas.oneclick_schemas import (
+                TransactionHistoryResponse,
+                TransactionHistoryItem,
+                TransactionDetailResponse
+            )
+
+            logger.info(
+                "Obteniendo historial de transacciones",
+                username=username,
+                page=page,
+                limit=limit
+            )
+
+            # Calculate offset
+            offset = (page - 1) * limit
+
+            # Get transactions via repository
+            transactions_orm = self.transaction_repo.get_by_username(
+                username=username,
+                skip=offset,
+                limit=limit
+            )
+
+            # TODO: Apply additional filters (start_date, end_date, status)
+            # This should be implemented in the repository layer
+
+            # Convert ORM to Pydantic
+            transaction_items = []
+            for transaction in transactions_orm:
+                detail_responses = [
+                    TransactionDetailResponse(
+                        amount=detail.amount,
+                        status=detail.status,
+                        authorization_code=detail.authorization_code,
+                        payment_type_code=detail.payment_type_code,
+                        response_code=detail.response_code,
+                        installments_number=detail.installments_number,
+                        commerce_code=detail.commerce_code,
+                        buy_order=detail.buy_order,
+                        balance=detail.balance if hasattr(detail, 'balance') else None
+                    )
+                    for detail in transaction.details
+                ]
+
+                transaction_items.append(
+                    TransactionHistoryItem(
+                        parent_buy_order=transaction.buy_order,
+                        transaction_date=transaction.transaction_date.isoformat() if transaction.transaction_date else "",
+                        total_amount=sum(d.amount for d in transaction.details),
+                        card_number=transaction.card_number if hasattr(transaction, 'card_number') else "****",
+                        status=transaction.status if hasattr(transaction, 'status') else "unknown",
+                        details=detail_responses
+                    )
+                )
+
+            response_data = TransactionHistoryResponse(
+                username=username,
+                transactions=transaction_items,
+                pagination={
+                    "page": page,
+                    "limit": limit,
+                    "total": len(transactions_orm),  # TODO: Get actual total count from repository
+                    "total_pages": (len(transactions_orm) + limit - 1) // limit
+                }
+            )
+
+            logger.info(
+                "Historial de transacciones obtenido",
+                username=username,
+                count=len(transaction_items),
+                page=page
+            )
+
+            return response_data
+
+        except Exception as e:
+            logger.error(
+                "Error obteniendo historial de transacciones",
+                username=username,
+                error_type=type(e).__name__,
+                error=str(e),
+                exc_info=True
+            )
+            raise TransbankCommunicationException(str(e))
+
+    def _transaction_entity_to_pydantic(
+        self,
+        entity: TransactionEntity
+    ) -> TransactionAuthorizeResponse:
+        """
+        Convert TransactionEntity to Pydantic schema.
+
+        Args:
+            entity: TransactionEntity domain entity
+
+        Returns:
+            TransactionAuthorizeResponse: Pydantic schema with nested details
+        """
+        detail_responses = [
+            TransactionDetailResponse(
+                buy_order=detail.buy_order,
+                commerce_code=detail.commerce_code,
+                amount=detail.amount.value,
+                status=detail.status.value,
+                authorization_code=detail.authorization_code,
+                payment_type_code=detail.payment_type_code.value if detail.payment_type_code else None,
+                response_code=detail.response_code,
+                installments_number=detail.installments_number,
+                balance=None  # Not available in domain entity
+            )
+            for detail in entity.details
+        ]
+
+        return TransactionAuthorizeResponse(
+            buy_order=entity.buy_order,
+            session_id="",  # Not available in domain entity
+            card_detail={"card_number": entity.card_number} if entity.card_number else {},
+            accounting_date=entity.accounting_date or "",
+            transaction_date=entity.transaction_date.isoformat() if entity.transaction_date else "",
+            details=detail_responses
+        )

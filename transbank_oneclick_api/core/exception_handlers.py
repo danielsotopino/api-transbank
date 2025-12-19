@@ -1,88 +1,107 @@
+import structlog
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+
 from .exceptions import DomainException
-from ..schemas.response_models import ApiResponse, ApiError
-import structlog
 
 logger = structlog.get_logger(__name__)
 
-async def domain_exception_handler(request: Request, exc: DomainException):
+
+async def domain_exception_handler(request: Request, exc: DomainException) -> JSONResponse:
+    """
+    Handle domain layer exceptions.
+
+    Converts DomainException to StandardResponse format.
+    """
     logger.warning(
-        f"Error de dominio: {exc.message}",
-        context={
-            "error_code": exc.error_code,
-            "endpoint": str(request.url.path),
-            "method": request.method
-        }
+        "Domain exception occurred",
+        code=exc.code,
+        message=exc.message,
+        path=request.url.path,
+        method=request.method,
+        details=exc.details
     )
-    
-    response = ApiResponse.single_error(exc.error_code, exc.message)
+
     return JSONResponse(
-        status_code=400,
-        content=response.dict()
-    )
-
-
-async def http_exception_handler(request: Request, exc: HTTPException):
-    logger.warning(
-        f"HTTP Exception: {exc.detail}",
-        context={
-            "status_code": exc.status_code,
-            "endpoint": str(request.url.path),
-            "method": request.method
+        status_code=exc.http_status,
+        content={
+            "code": exc.code,
+            "message": exc.message,
+            "data": exc.details if exc.details else None
         }
     )
-    
-    response = ApiResponse.single_error("HTTP_ERROR", str(exc.detail))
+
+
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """Handle FastAPI HTTP exceptions."""
+    logger.warning(
+        "HTTP exception occurred",
+        status_code=exc.status_code,
+        detail=str(exc.detail),
+        path=request.url.path,
+        method=request.method
+    )
+
     return JSONResponse(
         status_code=exc.status_code,
-        content=response.dict()
-    )
-
-
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    errors = []
-    for error in exc.errors():
-        field_name = error['loc'][-1] if error['loc'] else 'unknown'
-        errors.append(ApiError(
-            code="VALIDATION_ERROR",
-            message=f"{field_name}: {error['msg']}"
-        ))
-    print('errors', exc.errors())
-    logger.error(
-        event="Validation error",
-        context={
-            "errors": [{"field": err.code, "message": err.message} for err in errors],
-            "endpoint": str(request.url.path),
-            "method": request.method
+        content={
+            "code": str(exc.status_code),
+            "message": str(exc.detail),
+            "data": None
         }
     )
-    
-    response = ApiResponse.error_response(errors)
+
+
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Handle Pydantic validation errors."""
+    validation_errors = exc.errors()
+
+    logger.warning(
+        "Validation error occurred",
+        path=request.url.path,
+        method=request.method,
+        validation_errors=validation_errors
+    )
+
+    # Format validation errors for response
+    error_details = []
+    for error in validation_errors:
+        field_name = '.'.join(str(x) for x in error['loc']) if error['loc'] else 'unknown'
+        error_details.append({
+            "field": field_name,
+            "message": error['msg'],
+            "type": error['type']
+        })
+
     return JSONResponse(
         status_code=422,
-        content=response.dict()
-    )
-
-
-async def general_exception_handler(request: Request, exc: Exception):
-    logger.error(
-        f"Error inesperado: {str(exc)}",
-        context={
-            "endpoint": str(request.url.path),
-            "method": request.method
-        },
-        error={
-            "type": type(exc).__name__,
-            "message": str(exc)
+        content={
+            "code": "01",  # BAD_REQUEST code
+            "message": "Invalid request data",
+            "data": {"validation_errors": error_details}
         }
     )
-    
-    response = ApiResponse.single_error("INTERNAL_ERROR", "Error interno del servidor")
+
+
+async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Handle unexpected errors."""
+    logger.error(
+        "Unexpected error occurred",
+        error_type=type(exc).__name__,
+        error_message=str(exc),
+        path=request.url.path,
+        method=request.method,
+        exc_info=True
+    )
+
     return JSONResponse(
         status_code=500,
-        content=response.dict()
+        content={
+            "code": "500",  # INTERNAL_ERROR code
+            "message": "Internal server error",
+            "data": None
+        }
     )
 
 
