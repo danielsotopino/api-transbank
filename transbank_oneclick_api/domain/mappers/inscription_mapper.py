@@ -53,8 +53,10 @@ class InscriptionMapper:
         else:
             status = InscriptionStatus.PENDING
 
-        # Handle url_webpay field
-        url_webpay = getattr(orm_model, 'url_webpay', '')
+        # Handle url_webpay field - use default if not available
+        url_webpay = getattr(orm_model, 'url_webpay', None)
+        if not url_webpay:
+            url_webpay = "https://webpay.transbank.cl"  # Default URL for inscriptions created via finish
 
         return InscriptionEntity(
             id=orm_model.id,

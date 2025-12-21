@@ -61,10 +61,15 @@ class TransbankService:
     def __init__(
         self,
         db: Session = Depends(get_db),
-        inscription_repo: InscriptionRepository = InscriptionRepository(),
-        transaction_repo: TransactionRepository = TransactionRepository()
+        inscription_repo: InscriptionRepository = None,
+        transaction_repo: TransactionRepository = None
     ):
         self.db = db
+        # Initialize repos with db session if not provided
+        if inscription_repo is None:
+            inscription_repo = InscriptionRepository(db=db)
+        if transaction_repo is None:
+            transaction_repo = TransactionRepository(db=db)
         self.inscription_repo = inscription_repo
         self.transaction_repo = transaction_repo
         self._configure_transbank()
@@ -178,11 +183,14 @@ class TransbankService:
                 card_number=response["card_number"]
             )
 
+            # Use username as email if it's a valid email, otherwise use a default format
+            email = request.username if "@" in request.username else f"{request.username}@example.com"
+            
             inscription_entity = InscriptionEntity(
                 username=request.username,
-                email=request.username,  # No disponible en el resultado, requiere refactor para persistir desde start
+                email=email,  # Use username if it's an email, otherwise format it
                 tbk_user=response["tbk_user"],
-                url_webpay="",  # Not available in finish response
+                url_webpay="https://webpay.transbank.cl",  # Default URL since not available in finish response
                 status=InscriptionStatus.COMPLETED,
                 card_details=card_details,
                 authorization_code=response["authorization_code"],
@@ -387,11 +395,15 @@ class TransbankService:
             )
 
             # 9. Convert Domain Entity to Pydantic schema
-            return self._transaction_entity_to_pydantic(saved_entity)
+            return self._transaction_entity_to_pydantic(saved_entity, session_id=response.get("session_id", ""))
 
         except (InscriptionNotFoundException, ValueError):
             raise
         except Exception as e:
+            # Check if it's already a domain exception
+            from ..core.exceptions import DomainException
+            if isinstance(e, DomainException):
+                raise
             self.db.rollback()
             logger.error(
                 "Error autorizando transacción",
@@ -710,13 +722,15 @@ class TransbankService:
 
     def _transaction_entity_to_pydantic(
         self,
-        entity: TransactionEntity
+        entity: TransactionEntity,
+        session_id: str = ""
     ) -> TransactionAuthorizeResponse:
         """
         Convert TransactionEntity to Pydantic schema.
 
         Args:
             entity: TransactionEntity domain entity
+            session_id: Session ID from Transbank response
 
         Returns:
             TransactionAuthorizeResponse: Pydantic schema with nested details
@@ -738,7 +752,7 @@ class TransbankService:
 
         return TransactionAuthorizeResponse(
             parent_buy_order=entity.buy_order,
-            session_id="",  # Not available in domain entity
+            session_id=session_id,
             card_detail={"card_number": entity.card_number} if entity.card_number else {},
             accounting_date=entity.accounting_date or "",
             transaction_date=entity.transaction_date.isoformat() if entity.transaction_date else "",
