@@ -10,68 +10,71 @@ class TestInscriptionRepository:
 
     def test_create_inscription(self, db_session):
         """Test creating a new inscription"""
+        from datetime import datetime
         repo = InscriptionRepository(db_session)
 
         inscription_data = {
             "username": "testuser",
             "email": "test@example.com",
             "tbk_user": "tbk_test_123",
-            "url_webpay": "https://webpay.test",
-            "status": "PENDING"
+            "inscription_date": datetime.utcnow(),
+            "is_active": False  # PENDING
         }
 
         inscription = repo.create(inscription_data)
-        db_session.commit()
+        db_session.flush()
 
         assert inscription.id is not None
         assert inscription.username == "testuser"
         assert inscription.email == "test@example.com"
         assert inscription.tbk_user == "tbk_test_123"
-        assert inscription.status == "PENDING"
-        assert inscription.created_at is not None
+        assert inscription.is_active is False
+        assert inscription.inscription_date is not None
 
     def test_get_by_id(self, db_session):
         """Test retrieving inscription by ID"""
+        from datetime import datetime
         repo = InscriptionRepository(db_session)
 
         inscription_data = {
             "username": "testuser2",
             "email": "test2@example.com",
             "tbk_user": "tbk_test_456",
-            "url_webpay": "https://webpay.test",
-            "status": "COMPLETED"
+            "inscription_date": datetime.utcnow(),
+            "is_active": True  # COMPLETED
         }
 
         created = repo.create(inscription_data)
-        db_session.commit()
+        db_session.flush()
 
         retrieved = repo.get_by_id(created.id)
 
         assert retrieved is not None
         assert retrieved.id == created.id
         assert retrieved.username == "testuser2"
-        assert retrieved.status == "COMPLETED"
+        assert retrieved.is_active is True
 
     def test_get_by_username(self, db_session):
         """Test retrieving inscription by username"""
+        from datetime import datetime
         repo = InscriptionRepository(db_session)
 
         inscription_data = {
             "username": "testuser3",
             "email": "test3@example.com",
             "tbk_user": "tbk_test_789",
-            "url_webpay": "https://webpay.test",
-            "status": "COMPLETED"
+            "inscription_date": datetime.utcnow(),
+            "is_active": True  # COMPLETED
         }
 
         repo.create(inscription_data)
-        db_session.commit()
+        db_session.flush()
 
         inscription = repo.get_by_username("testuser3")
 
         assert inscription is not None
         assert inscription.username == "testuser3"
-        assert inscription.status == "COMPLETED"
+        assert inscription.is_active is True
         assert inscription.email == "test3@example.com"
 
     def test_get_by_username_not_found(self, db_session):
@@ -90,12 +93,12 @@ class TestInscriptionRepository:
             "username": "testuser4",
             "email": "test4@example.com",
             "tbk_user": "tbk_unique_token_123",
-            "url_webpay": "https://webpay.test",
-            "status": "COMPLETED"
+            "inscription_date": datetime.utcnow(),
+            "is_active": True  # COMPLETED
         }
 
         repo.create(inscription_data)
-        db_session.commit()
+        db_session.flush()
 
         inscription = repo.get_by_tbk_user("tbk_unique_token_123")
 
@@ -120,8 +123,8 @@ class TestInscriptionRepository:
             "username": "testuser5",
             "email": "test5@example.com",
             "tbk_user": "tbk_pending_123",
-            "url_webpay": "https://webpay.test",
-            "status": "PENDING"
+            "inscription_date": datetime.utcnow(),
+            "is_active": False  # PENDING
         }
         repo.create(pending_data)
 
@@ -130,11 +133,11 @@ class TestInscriptionRepository:
             "username": "testuser6",
             "email": "test6@example.com",
             "tbk_user": "tbk_completed_456",
-            "url_webpay": "https://webpay.test",
-            "status": "COMPLETED"
+            "inscription_date": datetime.utcnow(),
+            "is_active": True  # COMPLETED
         }
         repo.create(completed_data)
-        db_session.commit()
+        db_session.flush()
 
         # Should return None for PENDING
         pending_inscription = repo.get_active_by_username("testuser5")
@@ -144,7 +147,7 @@ class TestInscriptionRepository:
         completed_inscription = repo.get_active_by_username("testuser6")
         assert completed_inscription is not None
         assert completed_inscription.username == "testuser6"
-        assert completed_inscription.status == "COMPLETED"
+        assert completed_inscription.is_active is True
 
     def test_update_inscription(self, db_session):
         """Test updating an inscription"""
@@ -154,28 +157,28 @@ class TestInscriptionRepository:
             "username": "testuser7",
             "email": "test7@example.com",
             "tbk_user": "tbk_initial_token",
-            "url_webpay": "https://webpay.test",
-            "status": "PENDING"
+            "inscription_date": datetime.utcnow(),
+            "is_active": False  # PENDING
         }
 
         created = repo.create(inscription_data)
-        db_session.commit()
+        db_session.flush()
 
         # Update status and tbk_user
         updated = repo.update(created.id, {
-            "status": "COMPLETED",
+            "is_active": True,  # COMPLETED
             "tbk_user": "tbk_final_token",
             "card_type": "VISA",
-            "card_number": "****1234"
+            "card_number_masked": "****1234"
         })
-        db_session.commit()
+        db_session.flush()
 
         assert updated is not None
         assert updated.id == created.id
-        assert updated.status == "COMPLETED"
+        assert updated.is_active is True
         assert updated.tbk_user == "tbk_final_token"
         assert updated.card_type == "VISA"
-        assert updated.card_number == "****1234"
+        assert updated.card_number_masked == "****1234"
 
     def test_delete_inscription(self, db_session):
         """Test deleting an inscription"""
@@ -185,16 +188,16 @@ class TestInscriptionRepository:
             "username": "testuser8",
             "email": "test8@example.com",
             "tbk_user": "tbk_delete_test",
-            "url_webpay": "https://webpay.test",
-            "status": "COMPLETED"
+            "inscription_date": datetime.utcnow(),
+            "is_active": True  # COMPLETED
         }
 
         created = repo.create(inscription_data)
-        db_session.commit()
+        db_session.flush()
 
         # Delete inscription
         result = repo.delete(created.id)
-        db_session.commit()
+        db_session.flush()
 
         assert result is True
 
@@ -220,12 +223,12 @@ class TestInscriptionRepository:
                 "username": f"testuser_all_{i}",
                 "email": f"test{i}@example.com",
                 "tbk_user": f"tbk_token_{i}",
-                "url_webpay": "https://webpay.test",
-                "status": "COMPLETED"
+                "inscription_date": datetime.utcnow(),
+                "is_active": True  # COMPLETED
             }
             repo.create(inscription_data)
 
-        db_session.commit()
+        db_session.flush()
 
         # Get all inscriptions
         inscriptions = repo.get_all(skip=0, limit=10)
@@ -243,12 +246,12 @@ class TestInscriptionRepository:
                 "username": f"testuser_paginate_{i}",
                 "email": f"paginate{i}@example.com",
                 "tbk_user": f"tbk_paginate_{i}",
-                "url_webpay": "https://webpay.test",
-                "status": "COMPLETED"
+                "inscription_date": datetime.utcnow(),
+                "is_active": True  # COMPLETED
             }
             repo.create(inscription_data)
 
-        db_session.commit()
+        db_session.flush()
 
         # Get first page (5 items)
         page1 = repo.get_all(skip=0, limit=5)

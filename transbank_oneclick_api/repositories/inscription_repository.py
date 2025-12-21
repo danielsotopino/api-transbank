@@ -67,7 +67,7 @@ class InscriptionRepository(BaseRepository[OneclickInscription]):
         logger.debug("Querying active inscription", username=username)
         return self.db.query(OneclickInscription).filter(
             OneclickInscription.username == username,
-            OneclickInscription.status == "COMPLETED"
+            OneclickInscription.is_active
         ).first()
 
     def find_by_username_entity(self, username: str) -> Optional[InscriptionEntity]:

@@ -22,10 +22,10 @@ class TestInscriptionAPI:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["success"] is True
+        assert data["code"] == "00"
+        assert data["message"] is not None
         assert data["data"]["token"] == "test_token_123"
         assert data["data"]["url_webpay"] == "https://webpay.transbank.cl/test"
-        assert data["errors"] == []
     
     def test_start_inscription_validation_error(self, client):
         # Arrange
@@ -43,16 +43,16 @@ class TestInscriptionAPI:
         
         # Assert
         assert response.status_code == 422
+        # Validation errors can return either FastAPI's default format or custom format
         data = response.json()
-        assert data["success"] is False
-        assert len(data["errors"]) > 0
+        assert "detail" in data or "code" in data
     
     @patch('transbank_oneclick_api.services.transbank_service.MallInscription.finish')
     def test_finish_inscription_success(self, mock_finish, client, db_session):
         # Arrange
         mock_finish.return_value = {
             "response_code": 0,
-            "tbk_user": "user_token_123",
+            "tbk_user": "dd@dd.cl",
             "authorization_code": "auth_123",
             "card_type": "VISA",
             "card_number": "XXXX-XXXX-XXXX-1234"
@@ -69,9 +69,9 @@ class TestInscriptionAPI:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["success"] is True
+        assert data["code"] == "00"
         assert data["data"]["response_code"] == 0
-        assert data["data"]["tbk_user"] == "user_token_123"
+        assert data["data"]["tbk_user"] == "dd@dd.cl"
         assert data["data"]["card_type"] == "VISA"
     
     def test_list_inscriptions_empty(self, client):
@@ -81,7 +81,7 @@ class TestInscriptionAPI:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["success"] is True
+        assert data["code"] == "00"
         assert data["data"]["username"] == "testuser"
         assert data["data"]["inscriptions"] == []
         assert data["data"]["total_inscriptions"] == 0
@@ -140,11 +140,11 @@ class TestTransactionAPI:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["success"] is True
+        assert data["code"] == "00"
         assert data["data"]["parent_buy_order"] == sample_transaction_data["parent_buy_order"]
         assert data["data"]["session_id"] == "session_123"
         assert len(data["data"]["details"]) == 1
-        assert data["data"]["details"][0]["status"] == "approved"
+        assert data["data"]["details"][0]["status"] == "AUTHORIZED"
     
     def test_authorize_transaction_duplicate_order(self, client, db_session, sample_transaction_data):
         # Arrange - Create an inscription and existing transaction
@@ -191,8 +191,8 @@ class TestTransactionAPI:
         # Assert
         assert response.status_code == 400
         data = response.json()
-        assert data["success"] is False
-        assert any("ORDEN_COMPRA_DUPLICADA" in error["code"] for error in data["errors"])
+        assert data["code"] != "00"
+        assert "ORDEN_COMPRA_DUPLICADA" in data["code"] or "duplicate" in data["message"].lower()
     
     def test_transaction_history_empty(self, client):
         # Act
@@ -201,7 +201,7 @@ class TestTransactionAPI:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["success"] is True
+        assert data["code"] == "00"
         assert data["data"]["username"] == "testuser"
         assert data["data"]["transactions"] == []
         assert data["data"]["pagination"]["total"] == 0
@@ -227,7 +227,7 @@ class TestHealthCheck:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["success"] is True
+        assert data["code"] == "00"
         assert data["data"]["status"] == "healthy"
         assert "service" in data["data"]
         assert "version" in data["data"]

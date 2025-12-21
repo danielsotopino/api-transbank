@@ -737,7 +737,7 @@ class TransbankService:
         ]
 
         return TransactionAuthorizeResponse(
-            buy_order=entity.buy_order,
+            parent_buy_order=entity.buy_order,
             session_id="",  # Not available in domain entity
             card_detail={"card_number": entity.card_number} if entity.card_number else {},
             accounting_date=entity.accounting_date or "",
