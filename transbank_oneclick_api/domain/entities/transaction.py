@@ -90,6 +90,7 @@ class TransactionEntity:
     buy_order: str
     details: List[TransactionDetail] = field(default_factory=list)
     id: Optional[str] = None
+    inscription_id: Optional[str] = None
     card_number: Optional[str] = None
     accounting_date: Optional[str] = None
     transaction_date: Optional[datetime] = None

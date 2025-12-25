@@ -46,6 +46,7 @@ class TransactionMapper:
         return TransactionEntity(
             id=orm_model.id,
             username=orm_model.username,
+            inscription_id=orm_model.inscription_id,
             buy_order=buy_order,
             card_number=card_number,
             accounting_date=orm_model.accounting_date,
@@ -94,6 +95,7 @@ class TransactionMapper:
 
         orm_model = OneclickTransaction(
             id=transaction_id,
+            inscription_id=entity.inscription_id,
             username=entity.username,
             accounting_date=entity.accounting_date,
             transaction_date=entity.transaction_date,

@@ -350,6 +350,7 @@ class TransbankService:
             transaction_entity = TransactionEntity(
                 username=username,
                 buy_order=buy_order,
+                inscription_id=inscription_entity.id,
                 card_number=response.get("card_detail", {}).get("card_number"),
                 accounting_date=response.get("accounting_date"),
                 transaction_date=response.get("transaction_date"),
