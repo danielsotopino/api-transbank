@@ -163,7 +163,6 @@ class TransactionRepository(BaseRepository[OneclickTransaction]):
         orm_model = self.mapper.to_orm(transaction)
         self.db.add(orm_model)
         self.db.flush()
-        self.db.refresh(orm_model)
 
         logger.debug("Transaction entity saved", transaction_id=orm_model.id)
         return self.mapper.to_domain(orm_model)

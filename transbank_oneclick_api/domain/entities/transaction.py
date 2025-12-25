@@ -55,7 +55,7 @@ class TransactionDetail:
     payment_type_code: Optional[PaymentType] = None
     response_code: Optional[int] = None
     installments_number: Optional[int] = None
-    id: Optional[int] = None
+    id: Optional[str] = None
 
     def __post_init__(self):
         """Validate detail."""

@@ -122,7 +122,6 @@ class InscriptionRepository(BaseRepository[OneclickInscription]):
             self.db.add(orm_model)
 
         self.db.flush()
-        self.db.refresh(orm_model)
 
         logger.debug("Inscription entity saved", inscription_id=orm_model.id)
         return self.mapper.to_domain(orm_model)

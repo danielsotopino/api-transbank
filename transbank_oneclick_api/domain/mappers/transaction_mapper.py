@@ -1,4 +1,5 @@
 from typing import List
+import uuid
 from transbank_oneclick_api.domain.entities.transaction import (
     TransactionEntity,
     TransactionDetail,
@@ -84,11 +85,15 @@ class TransactionMapper:
         Returns:
             OneclickTransaction: ORM model with details
         """
+
+        # Generate UUID if id is not provided
+        transaction_id = entity.id if entity.id else str(uuid.uuid4())
+        
         # Calculate total amount from details
         total_amount = sum(detail.amount.value for detail in entity.details)
 
         orm_model = OneclickTransaction(
-            id=entity.id,
+            id=transaction_id,
             username=entity.username,
             accounting_date=entity.accounting_date,
             transaction_date=entity.transaction_date,
@@ -112,7 +117,7 @@ class TransactionMapper:
 
         # Convert details
         orm_model.details = [
-            TransactionMapper._detail_to_orm(detail, entity.id)
+            TransactionMapper._detail_to_orm(detail, transaction_id)
             for detail in entity.details
         ]
 
@@ -125,7 +130,7 @@ class TransactionMapper:
     ) -> OneclickTransactionDetail:
         """Convert domain detail to ORM detail."""
         return OneclickTransactionDetail(
-            id=detail.id,
+            id=detail.id if detail.id else str(uuid.uuid4()),
             transaction_id=transaction_id,
             commerce_code=detail.commerce_code,
             buy_order=detail.buy_order,
