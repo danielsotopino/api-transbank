@@ -1,4 +1,5 @@
 import structlog
+from typing import Optional
 from fastapi import APIRouter, Depends
 
 from transbank_oneclick_api.api.deps import get_transbank_service
@@ -7,7 +8,7 @@ from transbank_oneclick_api.repositories.inscription_repository import \
     InscriptionRepository
 from transbank_oneclick_api.schemas.oneclick_schemas import (
     InscriptionDeleteRequest, InscriptionDeleteResponse,
-    InscriptionFinishRequest, InscriptionFinishResponse, InscriptionInfo,
+    InscriptionFinishRequest, InscriptionFinishResponse,
     InscriptionListResponse, InscriptionStartRequest, InscriptionStartResponse)
 from transbank_oneclick_api.schemas.response_models import ApiResponse
 from transbank_oneclick_api.services.transbank_service import TransbankService
@@ -112,62 +113,29 @@ async def delete_inscription(
 @router.get("/{username}", response_model=ApiResponse[InscriptionListResponse])
 async def list_user_inscriptions(
     username: str,
-    inscription_repo: InscriptionRepository = Depends()
+    is_active: Optional[bool] = None,
+    transbank_service: TransbankService = Depends(get_transbank_service)
 ):
     """
-    Get all active inscriptions for a user.
+    Get all inscriptions for a user, optionally filtered by active status.
 
     Router responsibilities:
-    - Validate input
-    - Call repository for data
-    - Convert ORM to Pydantic
+    - Validate input (Pydantic)
+    - Call service
     - Return standardized response
 
-    Note: This is a read-only operation, so it's acceptable to use repository directly
-    without a service layer method.
+    Query parameters:
+    - is_active: Optional filter. If True, returns only active inscriptions.
+                 If False, returns only inactive inscriptions.
+                 If None (default), returns all inscriptions.
     """
     try:
-        logger.info("Listing user inscriptions", username=username)
+        logger.info("Listing user inscriptions", username=username, is_active=is_active)
 
-        # Get inscriptions via repository
-        # For a complete list, we'd need a method like:
-        # inscriptions_orm = inscription_repo.get_all_active_by_username(username)
-        # For now, using db.query as temporary solution
-
-        # TODO: Add get_all_active_by_username method to InscriptionRepository
-        from transbank_oneclick_api.models.oneclick_inscription import \
-            OneclickInscription
-        db = inscription_repo.db
-        inscriptions_orm = db.query(OneclickInscription).filter(
-            OneclickInscription.username == username
-        ).all()
-
-        # Convert ORM to Pydantic
-        inscription_list = [
-            InscriptionInfo(
-                tbk_user=inscription.tbk_user,
-                card_type=inscription.card_type if hasattr(inscription, 'card_type') else "UNKNOWN",
-                card_number=inscription.card_number if hasattr(inscription, 'card_number') else "****",
-                inscription_date=inscription.created_at,
-                status="active",
-                is_default=False  # TODO: Implement default card logic
-            )
-            for inscription in inscriptions_orm
-        ]
-
-        response_data = InscriptionListResponse(
-            username=username,
-            inscriptions=inscription_list,
-            total_inscriptions=len(inscription_list)
+        # Service handles repository call and ORM to Pydantic conversion
+        return ApiResponse.success_response(
+            await transbank_service.list_user_inscriptions(username, is_active)
         )
-
-        logger.info(
-            "Retrieved inscriptions",
-            username=username,
-            total_inscriptions=len(inscription_list)
-        )
-
-        return ApiResponse.success_response(response_data)
 
     except Exception as e:
         logger.error(

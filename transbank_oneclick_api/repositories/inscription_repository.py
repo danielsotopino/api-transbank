@@ -1,6 +1,6 @@
 import structlog
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from fastapi import Depends
 
 from transbank_oneclick_api.models.oneclick_inscription import OneclickInscription
@@ -69,6 +69,30 @@ class InscriptionRepository(BaseRepository[OneclickInscription]):
             OneclickInscription.username == username,
             OneclickInscription.is_active
         ).first()
+
+    def get_all_by_username(self, username: str, is_active: Optional[bool] = None) -> List[OneclickInscription]:
+        """
+        Get all inscriptions by username, optionally filtered by active status.
+
+        Args:
+            username: Username to search
+            is_active: Optional filter for active status.
+                      If True, returns only active inscriptions.
+                      If False, returns only inactive inscriptions.
+                      If None, returns all inscriptions regardless of status.
+
+        Returns:
+            List[OneclickInscription]: List of ORM models
+        """
+        logger.debug("Querying inscriptions by username", username=username, is_active=is_active)
+        query = self.db.query(OneclickInscription).filter(
+            OneclickInscription.username == username
+        )
+        
+        if is_active is not None:
+            query = query.filter(OneclickInscription.is_active == is_active)
+        
+        return query.all()
 
     def find_by_username_entity(self, username: str) -> Optional[InscriptionEntity]:
         """

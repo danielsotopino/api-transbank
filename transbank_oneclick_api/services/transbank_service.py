@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
-from typing import List
-import uuid
+from typing import List, Optional
 import structlog
 from sqlalchemy.orm import Session
 from fastapi import Depends
@@ -29,6 +28,8 @@ from ..schemas.oneclick_schemas import (
     InscriptionStartRequest,
     InscriptionStartResponse,
     InscriptionFinishResponse,
+    InscriptionListResponse,
+    InscriptionInfo,
     TransactionAuthorizeResponse,
     TransactionDetailResponse,
     TransactionStatusResponse,
@@ -286,6 +287,75 @@ class TransbankService:
                 exc_info=True
             )
             raise TransbankCommunicationException(str(e))
+
+    async def list_user_inscriptions(
+        self,
+        username: str,
+        is_active: Optional[bool] = None
+    ) -> InscriptionListResponse:
+        """
+        List all inscriptions for a user, optionally filtered by active status.
+
+        Args:
+            username: User identifier
+            is_active: Optional filter for active status.
+                      If True, returns only active inscriptions.
+                      If False, returns only inactive inscriptions.
+                      If None, returns all inscriptions regardless of status.
+
+        Returns:
+            InscriptionListResponse: Pydantic schema with list of inscriptions
+
+        Raises:
+            None: This is a read-only operation, no exceptions expected
+        """
+        try:
+            logger.info(
+                "Listing user inscriptions",
+                username=username,
+                is_active=is_active
+            )
+
+            # Get inscriptions via repository
+            inscriptions_orm = self.inscription_repo.get_all_by_username(username, is_active)
+
+            # Convert ORM to Pydantic
+            inscription_list = [
+                InscriptionInfo(
+                    tbk_user=inscription.tbk_user,
+                    card_type=inscription.card_type or "UNKNOWN",
+                    card_number=inscription.card_number_masked or "****",
+                    inscription_date=inscription.inscription_date,
+                    status="active" if inscription.is_active else "inactive",
+                    is_default=inscription.is_default or False
+                )
+                for inscription in inscriptions_orm
+            ]
+
+            response_data = InscriptionListResponse(
+                username=username,
+                inscriptions=inscription_list,
+                total_inscriptions=len(inscription_list)
+            )
+
+            logger.info(
+                "Retrieved inscriptions",
+                username=username,
+                total_inscriptions=len(inscription_list),
+                is_active=is_active
+            )
+
+            return response_data
+
+        except Exception as e:
+            logger.error(
+                "Error retrieving inscriptions",
+                username=username,
+                error_type=type(e).__name__,
+                error=str(e),
+                exc_info=True
+            )
+            raise
 
     async def authorize_transaction(
         self,
