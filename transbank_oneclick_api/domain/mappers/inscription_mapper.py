@@ -88,6 +88,7 @@ class InscriptionMapper:
             email=entity.email,
             tbk_user=entity.tbk_user,
             authorization_code=entity.authorization_code,
+            inscription_date=entity.created_at,
             created_at=entity.created_at,
             updated_at=entity.updated_at
         )
