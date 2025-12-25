@@ -15,7 +15,7 @@ class OneclickInscription(Base):
     card_type = Column(String(50))
     card_number_masked = Column(String(20))  # Only last 4 digits
     authorization_code = Column(String(20))
-    inscription_date = Column(DateTime, nullable=False)
+    inscription_date = Column(DateTime, nullable=False, server_default=func.now())
     is_active = Column(Boolean, default=True)
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
