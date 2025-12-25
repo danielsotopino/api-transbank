@@ -99,7 +99,7 @@ class TransactionAuthorizeResponse(BaseModel):
     session_id: Optional[str] = None
     card_detail: dict
     accounting_date: str
-    transaction_date: str
+    transaction_date: datetime
     details: List[TransactionDetailResponse]
 
 
@@ -156,7 +156,7 @@ class TransactionHistoryItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     parent_buy_order: str
-    transaction_date: str
+    transaction_date: datetime
     total_amount: int
     card_number: str
     status: str

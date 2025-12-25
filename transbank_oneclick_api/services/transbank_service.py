@@ -344,16 +344,18 @@ class TransbankService:
                 details=transaction_details
             )
 
-            logger.debug("Response received from Transbank", buy_order=buy_order)
+            logger.debug("Response received from Transbank", response=response)
 
             # 5. Create Transaction Domain Entity
+            transaction_date = datetime.fromisoformat(response.get("transaction_date").replace("Z", "+00:00"))
+            
             transaction_entity = TransactionEntity(
                 username=username,
                 buy_order=buy_order,
                 inscription_id=inscription_entity.id,
                 card_number=response.get("card_detail", {}).get("card_number"),
                 accounting_date=response.get("accounting_date"),
-                transaction_date=response.get("transaction_date"),
+                transaction_date=transaction_date,
                 created_at=datetime.now(timezone.utc)
             )
 
@@ -446,12 +448,15 @@ class TransbankService:
             )
 
             # Transform response to Pydantic schema
+            # Handle transaction_date - can be datetime object or string (SDK version compatibility)
+            # transaction_date = datetime.fromisoformat(response.get("transaction_date").replace("Z", "+00:00"))
+            
             result = TransactionStatusResponse(
                 buy_order=response["buy_order"],
                 session_id=response.get("session_id", ""),
                 card_detail=response["card_detail"],
                 accounting_date=response["accounting_date"],
-                transaction_date=response["transaction_date"].isoformat(),
+                transaction_date=response.get("transaction_date"),
                 details=[
                     TransactionDetailResponse(
                         amount=detail["amount"],
@@ -675,18 +680,18 @@ class TransbankService:
                         installments_number=detail.installments_number,
                         commerce_code=detail.commerce_code,
                         buy_order=detail.buy_order,
-                        balance=detail.balance if hasattr(detail, 'balance') else None
+                        balance=detail.balance
                     )
                     for detail in transaction.details
                 ]
 
                 transaction_items.append(
                     TransactionHistoryItem(
-                        parent_buy_order=transaction.buy_order,
-                        transaction_date=transaction.transaction_date.isoformat() if transaction.transaction_date else "",
+                        parent_buy_order=transaction.parent_buy_order,
+                        transaction_date=transaction.transaction_date,
                         total_amount=sum(d.amount for d in transaction.details),
-                        card_number=transaction.card_number if hasattr(transaction, 'card_number') else "****",
-                        status=transaction.status if hasattr(transaction, 'status') else "unknown",
+                        card_number=transaction.card_number_masked,
+                        status=transaction.status,
                         details=detail_responses
                     )
                 )
@@ -750,12 +755,12 @@ class TransbankService:
             )
             for detail in entity.details
         ]
-
+        
         return TransactionAuthorizeResponse(
             parent_buy_order=entity.buy_order,
             session_id=session_id,
             card_detail={"card_number": entity.card_number} if entity.card_number else {},
             accounting_date=entity.accounting_date or "",
-            transaction_date=entity.transaction_date.isoformat() if entity.transaction_date else "",
+            transaction_date=entity.transaction_date,
             details=detail_responses
         )
