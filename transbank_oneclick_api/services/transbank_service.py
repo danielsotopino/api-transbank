@@ -236,16 +236,17 @@ class TransbankService:
 
     async def delete_inscription(self, tbk_user: str, username: str) -> bool:
         """
-        Delete card inscription.
+        Delete card inscription (soft delete).
 
         Args:
             tbk_user: Transbank user token
             username: User identifier
 
         Returns:
-            dict: Deletion confirmation
+            bool: Deletion confirmation
 
         Raises:
+            InscriptionNotFoundException: If inscription not found
             TransbankCommunicationException: If Transbank API call fails
         """
         try:
@@ -255,16 +256,19 @@ class TransbankService:
                 tbk_user_prefix=tbk_user[:10]
             )
 
-            # Use entity method to get inscription
-            inscription_entity = self.inscription_repo.find_active_by_username_entity(username)
+            # Get inscription ORM model (not entity) for soft delete
+            inscription = self.inscription_repo.get_active_by_username(username)
 
-            if not inscription_entity:
+            if not inscription:
                 raise InscriptionNotFoundException(username)
 
+            # Delete from Transbank
             self.mall_inscription.delete(tbk_user, username)
 
-            self.inscription_repo.delete(inscription_entity.id)
-
+            # Soft delete: mark as inactive in database
+            inscription.is_active = False
+            inscription.updated_at = datetime.now(timezone.utc)
+            
             self.db.commit()
 
             logger.info(
